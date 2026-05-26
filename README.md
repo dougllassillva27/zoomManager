@@ -1,7 +1,7 @@
 # Native Zoom Manager
 
 ![Status](https://img.shields.io/badge/status-active-success)
-![License](https://img.shields.io/badge/license-unlisted-lightgrey)
+![License](https://img.shields.io/badge/license-MIT-blue)
 ![Manifest](https://img.shields.io/badge/manifest-v3-blue)
 
 **Extensão Chrome MV3 para gerenciamento de zoom nativo por domínio com persistência automática.**
@@ -189,4 +189,6 @@ pytest tests/test_git_hooks.py
 
 ## 📄 Licença
 
-Licença não especificada no estado atual do projeto.
+Este projeto está licenciado sob a [MIT License](LICENSE).
+
+Copyright (c) 2026 Douglas Silva
