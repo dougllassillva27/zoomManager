@@ -1,0 +1,190 @@
+/**
+ * Native Zoom Manager - Popup Script
+ * UI para visualização e ajuste fino de zoom por domínio.
+ */
+
+const zoomRange = document.getElementById('zoomRange');
+const zoomNumber = document.getElementById('zoomNumber');
+const hostnameEl = document.getElementById('hostname');
+const resetBtn = document.getElementById('resetBtn');
+const btnOptions = document.getElementById('btn-options');
+
+let currentHostname = '';
+let currentTabId = null;
+let isUpdating = false;
+
+/**
+ * Envia mensagem ao background e retorna promessa.
+ */
+function sendMessage(message) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve(null);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
+/**
+ * Obtém aba ativa e extrai hostname.
+ */
+async function getActiveTabInfo() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.url) return null;
+  try {
+    return { tabId: tab.id, hostname: new URL(tab.url).hostname };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Atualiza UI com valor de zoom (em porcentagem).
+ */
+function updateUI(zoomPercent) {
+  isUpdating = true;
+  zoomRange.value = zoomPercent;
+  zoomNumber.value = zoomPercent;
+  isUpdating = false;
+}
+
+/**
+ * Arredonda valor para múltiplo de 2.
+ */
+function roundToStep2(val) {
+  return Math.round(val / 2) * 2;
+}
+
+/**
+ * Aplica zoom e salva no storage.
+ */
+async function applyAndSave(zoomPercent) {
+  if (!currentHostname || !currentTabId) return;
+  const level = zoomPercent / 100;
+
+  // Aplica zoom na aba ativa com tabId explícito
+  await sendMessage({ type: 'APPLY_ZOOM', tabId: currentTabId, level });
+
+  // Salva no storage
+  await sendMessage({
+    type: 'SAVE_ZOOM',
+    hostname: currentHostname,
+    level,
+  });
+}
+
+// --- Event Listeners ---
+
+// Slider change
+zoomRange.addEventListener('input', () => {
+  if (isUpdating) return;
+  const val = roundToStep2(parseInt(zoomRange.value, 10));
+  zoomNumber.value = val;
+  applyAndSave(val);
+});
+
+// Number input change
+zoomNumber.addEventListener('change', () => {
+  if (isUpdating) return;
+  let val = roundToStep2(parseInt(zoomNumber.value, 10));
+  val = Math.min(500, Math.max(26, val));
+  zoomNumber.value = val;
+  zoomRange.value = val;
+  applyAndSave(val);
+});
+
+// Reset button
+resetBtn.addEventListener('click', async () => {
+  if (!currentHostname || !currentTabId) return;
+  const defaultLevel = await sendMessage({ type: 'RESET_ZOOM', hostname: currentHostname });
+  const defaultPercent = Math.round((defaultLevel ?? 1.0) * 100);
+  await sendMessage({ type: 'APPLY_ZOOM', tabId: currentTabId, level: defaultLevel ?? 1.0 });
+  updateUI(defaultPercent);
+});
+
+// --- Presets ---
+const presetsGrid = document.getElementById('presets-grid');
+
+async function loadAndRenderPresets() {
+  const presets = await sendMessage({ type: 'GET_PRESETS' });
+  presetsGrid.innerHTML = '';
+  if (!presets || presets.length === 0) return;
+
+  presets.forEach(preset => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn';
+    btn.textContent = `${preset.label} (${preset.level}%)`;
+    btn.title = `${preset.label}: ${preset.level}%`;
+    btn.addEventListener('click', async () => {
+      if (!currentTabId) return;
+      await sendMessage({ type: 'APPLY_PRESET', level: preset.level, tabId: currentTabId });
+      const percent = Math.round(preset.level);
+      updateUI(percent);
+    });
+    presetsGrid.appendChild(btn);
+  });
+}
+
+// --- Inicialização ---
+(async function init() {
+  const tabInfo = await getActiveTabInfo();
+  if (!tabInfo) {
+    hostnameEl.textContent = 'Página não suportada';
+    zoomRange.disabled = true;
+    zoomNumber.disabled = true;
+    resetBtn.disabled = true;
+    return;
+  }
+
+  currentHostname = tabInfo.hostname;
+  currentTabId = tabInfo.tabId;
+  hostnameEl.textContent = currentHostname;
+
+  // Busca zoom salvo; se não existir, consulta zoom real da aba
+  const savedZoom = await sendMessage({ type: 'GET_ZOOM', hostname: currentHostname });
+  let zoomPercent;
+  if (savedZoom != null && savedZoom !== 1.0) {
+    zoomPercent = Math.round(savedZoom * 100);
+  } else {
+    const currentZoom = await sendMessage({ type: 'GET_CURRENT_ZOOM', tabId: currentTabId });
+    zoomPercent = Math.round((currentZoom ?? 1.0) * 100);
+  }
+  updateUI(zoomPercent);
+
+  // Carrega presets
+  await loadAndRenderPresets();
+})();
+
+// Escutar mudanças externas de zoom (atalhos, context menu)
+if (chrome.tabs?.onZoomChange) {
+  chrome.tabs.onZoomChange.addListener((zoomChangeInfo) => {
+    if (zoomChangeInfo.tabId === currentTabId) {
+      const percent = Math.round(zoomChangeInfo.newZoomFactor * 100);
+      updateUI(percent);
+    }
+  });
+}
+
+// Escutar mudanças no storage (context menu aplica preset/reset sem onZoomChange)
+chrome.storage.onChanged.addListener(async (changes) => {
+  if (!currentHostname || !currentTabId) return;
+  // Se o hostname atual foi alterado no storage, atualiza UI
+  if (changes[currentHostname]) {
+    const newValue = changes[currentHostname].newValue;
+    if (newValue != null) {
+      updateUI(Math.round(newValue * 100));
+    } else {
+      // Chave removida (reset): consulta zoom real da aba
+      const currentZoom = await sendMessage({ type: 'GET_CURRENT_ZOOM', tabId: currentTabId });
+      updateUI(Math.round((currentZoom ?? 1.0) * 100));
+    }
+  }
+});
+
+// Botão Opções
+btnOptions.addEventListener('click', () => {
+  chrome.runtime.openOptionsPage();
+});

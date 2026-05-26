@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Invólucro universal para chamar o pre-commit do Python no Git
+python .githooks/pre-commit.py

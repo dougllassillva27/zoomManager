@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1 class="title">Zoom Manager</h1>
+    <p id="hostname" class="hostname">--</p>
+
+    <div class="controls">
+      <label for="zoomRange" class="label">Nível de Zoom</label>
+      <input type="range" id="zoomRange" min="26" max="500" step="2" value="100">
+      <div class="value-row">
+        <input type="number" id="zoomNumber" min="26" max="500" step="2" value="100">
+        <span class="unit">%</span>
+      </div>
+    </div>
+
+    <div id="presets-grid" class="presets-grid"></div>
+
+    <button id="resetBtn" class="btn-reset">Resetar (Alt+Shift+R)</button>
+    <button id="btn-options" class="btn-reset">Opções</button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

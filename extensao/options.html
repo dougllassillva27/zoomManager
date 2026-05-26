@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <h1 class="title">Configurações do Zoom Manager</h1>
+
+    <div class="setting">
+      <label for="defaultZoom" class="label">Zoom Padrão (%)</label>
+      <p class="description">Valor aplicado ao resetar (Ctrl+0). Range: 25–500%.</p>
+      <div class="input-row">
+        <input type="number" id="defaultZoom" min="25" max="500" step="1" value="100">
+        <span class="unit">%</span>
+      </div>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <section class="setting" id="presets-section">
+      <label class="label">Presets de Zoom</label>
+      <p class="description">Salve até 8 níveis predefinidos. Eles aparecerão como botões no popup.</p>
+      <div class="input-row preset-add-row">
+        <input type="text" id="presetLabel" maxlength="20" placeholder="Label (ex: Leitura)">
+        <input type="number" id="presetLevel" min="25" max="500" step="2" value="100">
+        <span class="unit">%</span>
+        <button id="addPresetBtn" class="btn-add">+</button>
+      </div>
+      <ul id="presets-list" class="presets-list"></ul>
+    </section>
+  </div>
+
+  <script src="options.js"></script>
+</body>
+</html>

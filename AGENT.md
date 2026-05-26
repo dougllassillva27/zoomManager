@@ -1,0 +1,5 @@
+# 🦤 Dodo Starter Pack — Instruções do Agente
+
+Para regras de desenvolvimento, comandos de setup, qualidade (lint/format/tests) e o mindset rígido Anti-Vibe Coding deste projeto, você DEVE ler e seguir estritamente as diretrizes contidas no manifesto principal localizado na raiz:
+
+👉 **Leia e siga as regras do arquivo: [CLAUDE.md](./CLAUDE.md)**

@@ -1,0 +1,94 @@
+# =========================================
+# SEGURANÇA E AMBIENTE (Hardening)
+# =========================================
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.pfx
+secrets.*
+credentials.*
+
+# =========================================
+# DEPENDÊNCIAS / LOCKS / CACHES
+# =========================================
+node_modules/
+vendor/
+venv/
+.venv/
+env/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+__pycache__/
+*.py[cod]
+*.cache
+
+# =========================================
+# BUILD / ARTEFATOS GERADOS
+# =========================================
+dist/
+build/
+out/
+.next/
+.nuxt/
+coverage/
+*.min.js
+*.map
+
+# =========================================
+# LOGS / DADOS BRUTOS / TEMP
+# =========================================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+tmp/
+temp/
+backup/
+backups/
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================================
+# TESTES
+# =========================================
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+.nyc_output/
+
+# =========================================
+# IDE / EDITOR / SISTEMA
+# =========================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+.code-workspace
+
+# =========================================
+# GERENCIAMENTO IA (Context Hygiene)
+# =========================================
+.aiexclude
+.geminiignore
+resumo-de-trabalho.md
+
+# =========================================
+# IGNORADOS DO PROJETO (Personal/Local)
+# =========================================
+docs/skills/
+graphify-out/cache/
+graphify-out/MAPA.md
+graphify-out/TREE.md
+_contexto-ia/

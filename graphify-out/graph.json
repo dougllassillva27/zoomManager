@@ -1,0 +1,229 @@
+{
+  "directed": false,
+  "multigraph": false,
+  "graph": {},
+  "nodes": [
+    {
+      "label": "test_git_hooks.py",
+      "file_type": "code",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L1",
+      "id": "tests_test_git_hooks_py",
+      "community": 0,
+      "norm_label": "test_git_hooks.py"
+    },
+    {
+      "label": "test_pre_commit_secret_detection()",
+      "file_type": "code",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L31",
+      "id": "tests_test_git_hooks_test_pre_commit_secret_detection",
+      "community": 0,
+      "norm_label": "test_pre_commit_secret_detection()"
+    },
+    {
+      "label": "test_pre_commit_protected_paths()",
+      "file_type": "code",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L51",
+      "id": "tests_test_git_hooks_test_pre_commit_protected_paths",
+      "community": 0,
+      "norm_label": "test_pre_commit_protected_paths()"
+    },
+    {
+      "label": "test_commit_msg_validation()",
+      "file_type": "code",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L80",
+      "id": "tests_test_git_hooks_test_commit_msg_validation",
+      "community": 2,
+      "norm_label": "test_commit_msg_validation()"
+    },
+    {
+      "label": "Garante que segredos reais sejam casados pelas regexes de seguran\u00e7a.",
+      "file_type": "rationale",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L32",
+      "id": "tests_test_git_hooks_rationale_32",
+      "community": 0,
+      "norm_label": "garante que segredos reais sejam casados pelas regexes de seguranca."
+    },
+    {
+      "label": "Valida se caminhos protegidos e secretos s\u00e3o interceptados de forma correta.",
+      "file_type": "rationale",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L52",
+      "id": "tests_test_git_hooks_rationale_52",
+      "community": 0,
+      "norm_label": "valida se caminhos protegidos e secretos sao interceptados de forma correta."
+    },
+    {
+      "label": "Valida se o formato Conventional Commit + ID de Observa\u00e7\u00e3o \u00e9 rigidamente exigido",
+      "file_type": "rationale",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L81",
+      "id": "tests_test_git_hooks_rationale_81",
+      "community": 2,
+      "norm_label": "valida se o formato conventional commit + id de observacao e rigidamente exigido"
+    },
+    {
+      "label": "versionador.js",
+      "file_type": "code",
+      "source_file": "versionamento/versionador.js",
+      "source_location": "L1",
+      "id": "versionamento_versionador_js",
+      "community": 1,
+      "norm_label": "versionador.js"
+    },
+    {
+      "label": "gerarHash()",
+      "file_type": "code",
+      "source_file": "versionamento/versionador.js",
+      "source_location": "L30",
+      "id": "versionamento_versionador_gerarhash",
+      "community": 1,
+      "norm_label": "gerarhash()"
+    },
+    {
+      "label": "processarUrl()",
+      "file_type": "code",
+      "source_file": "versionamento/versionador.js",
+      "source_location": "L38",
+      "id": "versionamento_versionador_processarurl",
+      "community": 1,
+      "norm_label": "processarurl()"
+    },
+    {
+      "label": "processarConteudo()",
+      "file_type": "code",
+      "source_file": "versionamento/versionador.js",
+      "source_location": "L73",
+      "id": "versionamento_versionador_processarconteudo",
+      "community": 1,
+      "norm_label": "processarconteudo()"
+    },
+    {
+      "label": "varrerDiretorio()",
+      "file_type": "code",
+      "source_file": "versionamento/versionador.js",
+      "source_location": "L105",
+      "id": "versionamento_versionador_varrerdiretorio",
+      "community": 1,
+      "norm_label": "varrerdiretorio()"
+    }
+  ],
+  "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L31",
+      "weight": 1.0,
+      "source": "tests_test_git_hooks_py",
+      "target": "tests_test_git_hooks_test_pre_commit_secret_detection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L51",
+      "weight": 1.0,
+      "source": "tests_test_git_hooks_py",
+      "target": "tests_test_git_hooks_test_pre_commit_protected_paths",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L80",
+      "weight": 1.0,
+      "source": "tests_test_git_hooks_py",
+      "target": "tests_test_git_hooks_test_commit_msg_validation",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L32",
+      "weight": 1.0,
+      "source": "tests_test_git_hooks_rationale_32",
+      "target": "tests_test_git_hooks_test_pre_commit_secret_detection",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L52",
+      "weight": 1.0,
+      "source": "tests_test_git_hooks_rationale_52",
+      "target": "tests_test_git_hooks_test_pre_commit_protected_paths",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/test_git_hooks.py",
+      "source_location": "L81",
+      "weight": 1.0,
+      "source": "tests_test_git_hooks_rationale_81",
+      "target": "tests_test_git_hooks_test_commit_msg_validation",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "versionamento/versionador.js",
+      "source_location": "L30",
+      "weight": 1.0,
+      "source": "versionamento_versionador_js",
+      "target": "versionamento_versionador_gerarhash",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "versionamento/versionador.js",
+      "source_location": "L38",
+      "weight": 1.0,
+      "source": "versionamento_versionador_js",
+      "target": "versionamento_versionador_processarurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "versionamento/versionador.js",
+      "source_location": "L73",
+      "weight": 1.0,
+      "source": "versionamento_versionador_js",
+      "target": "versionamento_versionador_processarconteudo",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "versionamento/versionador.js",
+      "source_location": "L105",
+      "weight": 1.0,
+      "source": "versionamento_versionador_js",
+      "target": "versionamento_versionador_varrerdiretorio",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "versionamento/versionador.js",
+      "source_location": "L54",
+      "weight": 1.0,
+      "source": "versionamento_versionador_processarurl",
+      "target": "versionamento_versionador_gerarhash",
+      "confidence_score": 1.0
+    }
+  ],
+  "hyperedges": []
+}

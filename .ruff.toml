@@ -1,0 +1,35 @@
+# .ruff.toml - Configuração estrita e ultra-rápida do Ruff para Python
+
+# Alvo de compatibilidade do Python
+target-version = "py310"
+
+# Regras habilitadas
+line-length = 88
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "C90", # mccabe complexity
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade (modern Python syntax)
+]
+ignore = []
+
+# Evita varrer pastas indesejadas
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+[format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "lf"

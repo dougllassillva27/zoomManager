@@ -1,0 +1,267 @@
+:root {
+  color-scheme: dark;
+  --bg-amoled: #000000;
+  --bg-surface: #121212;
+  --bg-input: #1E1E1E;
+  --border-subtle: #2A2A2A;
+  --border-focus: #00FFFF;
+  --accent-primary: #00FFFF;
+  --accent-hover: #7C3AED;
+  --text-primary: #FFFFFF;
+  --text-secondary: #A0A0A0;
+  --glow-subtle: 0 0 8px rgba(0, 255, 255, 0.3);
+  --transition-fast: 150ms ease;
+  --success: #00FF88;
+  --error: #FF4466;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Roboto, -apple-system, sans-serif;
+  background: var(--bg-amoled);
+  color: var(--text-primary);
+  padding: 40px;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+  margin-bottom: 32px;
+  text-shadow: var(--glow-subtle);
+}
+
+.setting {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 20px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.setting:hover {
+  border-color: rgba(0, 255, 255, 0.2);
+  box-shadow: 0 0 16px rgba(0, 255, 255, 0.05);
+}
+
+.label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.description {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+input[type="number"] {
+  width: 100px;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 16px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  text-align: center;
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+input[type="number"]:focus {
+  border-color: var(--accent-primary);
+  box-shadow: var(--glow-subtle);
+}
+
+.unit {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-family: 'Consolas', 'Courier New', monospace;
+}
+
+.status {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  min-height: 20px;
+  padding: 6px 0;
+  transition: opacity 0.3s ease;
+}
+
+.status.success {
+  color: var(--success);
+  text-shadow: 0 0 6px rgba(0, 255, 136, 0.3);
+}
+
+.status.error {
+  color: var(--error);
+  text-shadow: 0 0 6px rgba(255, 68, 102, 0.3);
+}
+
+/* Presets Section */
+.preset-add-row {
+  margin-bottom: 16px;
+}
+
+.preset-add-row input[type="text"] {
+  flex: 1;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.preset-add-row input[type="text"]:focus {
+  border-color: var(--accent-primary);
+  box-shadow: var(--glow-subtle);
+}
+
+.preset-add-row input[type="number"] {
+  width: 80px;
+}
+
+.btn-add {
+  width: 40px;
+  height: 40px;
+  background: transparent;
+  border: 1px solid var(--accent-primary);
+  border-radius: 8px;
+  color: var(--accent-primary);
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-add:hover {
+  background: var(--accent-primary);
+  color: var(--bg-amoled);
+  box-shadow: var(--glow-subtle);
+}
+
+.presets-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  transition: border-color var(--transition-fast);
+}
+
+.preset-item:hover {
+  border-color: rgba(0, 255, 255, 0.2);
+}
+
+.preset-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.preset-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: 'Consolas', 'Courier New', monospace;
+}
+
+.preset-level {
+  font-size: 12px;
+  color: var(--accent-primary);
+  font-family: 'Consolas', 'Courier New', monospace;
+  text-shadow: var(--glow-subtle);
+}
+
+.btn-remove {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.btn-remove:hover {
+  border-color: var(--error);
+  color: var(--error);
+  text-shadow: 0 0 6px rgba(255, 68, 102, 0.3);
+}
+
+/* Number input spinners - dark style */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+/* Custom Scrollbar - Dark Amoled */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-amoled);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
+  transition: background var(--transition-fast);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-primary);
+  box-shadow: var(--glow-subtle);
+}
+
+::-webkit-scrollbar-corner {
+  background: var(--bg-amoled);
+}
