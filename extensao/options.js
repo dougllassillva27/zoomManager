@@ -137,6 +137,214 @@ async function savePresets() {
 
 addPresetBtn.addEventListener('click', addPreset);
 
+// --- Supabase Config ---
+const syncWarningEl = document.getElementById('syncWarning');
+const sbUrlInput = document.getElementById('sbUrl');
+const sbKeyInput = document.getElementById('sbKey');
+const btnSaveConfig = document.getElementById('btnSaveConfig');
+const btnTestConfig = document.getElementById('btnTestConfig');
+const btnClearConfig = document.getElementById('btnClearConfig');
+const configStatusEl = document.getElementById('configStatus');
+
+let configTimeout = null;
+
+function showConfigStatus(message, type) {
+  configStatusEl.textContent = message;
+  configStatusEl.className = `status ${type}`;
+  configStatusEl.style.opacity = '1';
+  if (configTimeout) clearTimeout(configTimeout);
+  configTimeout = setTimeout(() => {
+    configStatusEl.style.opacity = '0';
+  }, 3000);
+}
+
+function updateWarningVisibility(configured) {
+  if (configured) {
+    syncWarningEl.classList.remove('visible');
+  } else {
+    syncWarningEl.classList.add('visible');
+  }
+}
+
+async function loadSupabaseConfig() {
+  const result = await sendMessage({ type: 'GET_SUPABASE_CONFIG' });
+  if (result?.configured) {
+    sbUrlInput.value = result.url || '';
+    sbKeyInput.value = '';
+    sbKeyInput.placeholder = result.maskedKey || '••••••••';
+    updateWarningVisibility(true);
+  } else {
+    sbUrlInput.value = '';
+    sbKeyInput.value = '';
+    sbKeyInput.placeholder = 'eyJhbGci...';
+    updateWarningVisibility(false);
+  }
+}
+
+btnSaveConfig.addEventListener('click', async () => {
+  const url = sbUrlInput.value.trim();
+  const key = sbKeyInput.value.trim();
+
+  if (!url || !key) {
+    showConfigStatus('Preencha URL e Key.', 'error');
+    return;
+  }
+  if (!url.startsWith('https://')) {
+    showConfigStatus('URL deve começar com https://', 'error');
+    return;
+  }
+
+  btnSaveConfig.disabled = true;
+  const result = await sendMessage({ type: 'SAVE_SUPABASE_CONFIG', url, key });
+  btnSaveConfig.disabled = false;
+
+  if (result?.success) {
+    showConfigStatus('Configuração salva!', 'success');
+    await loadSupabaseConfig();
+  } else {
+    showConfigStatus(`Erro: ${result?.error || 'Falha ao salvar'}`, 'error');
+  }
+});
+
+btnTestConfig.addEventListener('click', async () => {
+  btnTestConfig.disabled = true;
+  showConfigStatus('Testando conexão...', 'success');
+  const result = await sendMessage({ type: 'TEST_SUPABASE' });
+  btnTestConfig.disabled = false;
+
+  if (result?.success) {
+    showConfigStatus('Conexão OK! Supabase acessível.', 'success');
+  } else {
+    showConfigStatus(`Falha: ${result?.error || 'Erro desconhecido'}`, 'error');
+  }
+});
+
+btnClearConfig.addEventListener('click', async () => {
+  if (!confirm('Limpar configuração Supabase? Os dados locais não serão afetados.')) return;
+  btnClearConfig.disabled = true;
+  const result = await sendMessage({ type: 'CLEAR_SUPABASE_CONFIG' });
+  btnClearConfig.disabled = false;
+
+  if (result?.success) {
+    showConfigStatus('Configuração limpa.', 'success');
+    sbUrlInput.value = '';
+    sbKeyInput.value = '';
+    sbKeyInput.placeholder = 'eyJhbGci...';
+    updateWarningVisibility(false);
+  }
+});
+
+// Detectar mudanças externas nas credenciais
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes['__supabaseUrl'] || changes['__supabaseKey']) {
+    loadSupabaseConfig();
+  }
+});
+
+// --- Sync / Export / Import ---
+const syncStatusEl = document.getElementById('syncStatus');
+const syncTextarea = document.getElementById('syncTextarea');
+const btnSyncPush = document.getElementById('btnSyncPush');
+const btnSyncPull = document.getElementById('btnSyncPull');
+const btnExport = document.getElementById('btnExport');
+const btnImport = document.getElementById('btnImport');
+
+let syncTimeout = null;
+
+function showSyncStatus(message, type) {
+  syncStatusEl.textContent = message;
+  syncStatusEl.className = `status ${type}`;
+  syncStatusEl.style.opacity = '1';
+  if (syncTimeout) clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(() => {
+    syncStatusEl.style.opacity = '0';
+  }, 3000);
+}
+
+function setSyncButtonsDisabled(disabled) {
+  btnSyncPush.disabled = disabled;
+  btnSyncPull.disabled = disabled;
+  btnExport.disabled = disabled;
+  btnImport.disabled = disabled;
+}
+
+btnSyncPull.addEventListener('click', async () => {
+  setSyncButtonsDisabled(true);
+  showSyncStatus('Puxando configurações...', 'success');
+  const result = await sendMessage({ type: 'SYNC_PULL' });
+  setSyncButtonsDisabled(false);
+  if (result?.success) {
+    showSyncStatus(`Configurações puxadas com sucesso! (${result.timestamp})`, 'success');
+    // Recarrega UI para refletir dados puxados
+    loadDefaultZoom();
+    loadPresets();
+  } else {
+    showSyncStatus(`Erro: ${result?.error || 'Desconhecido'}`, 'error');
+  }
+});
+
+btnSyncPush.addEventListener('click', async () => {
+  setSyncButtonsDisabled(true);
+  showSyncStatus('Sincronizando...', 'success');
+  const result = await sendMessage({ type: 'SYNC_PUSH' });
+  setSyncButtonsDisabled(false);
+  if (result?.success) {
+    showSyncStatus(`Sincronizado com sucesso! (${result.timestamp})`, 'success');
+  } else {
+    showSyncStatus(`Erro: ${result?.error || 'Desconhecido'}`, 'error');
+  }
+});
+
+btnExport.addEventListener('click', async () => {
+  setSyncButtonsDisabled(true);
+  showSyncStatus('Exportando...', 'success');
+  const result = await sendMessage({ type: 'EXPORT_DATA' });
+  setSyncButtonsDisabled(false);
+  if (result?.success) {
+    syncTextarea.value = result.data;
+    syncTextarea.select();
+    showSyncStatus('Dados exportados! Copie o conteúdo acima.', 'success');
+  } else {
+    showSyncStatus(`Erro: ${result?.error || 'Export failed'}`, 'error');
+  }
+});
+
+btnImport.addEventListener('click', async () => {
+  const base64 = syncTextarea.value.trim();
+  if (!base64) {
+    showSyncStatus('Cole os dados exportados no campo acima.', 'error');
+    return;
+  }
+  setSyncButtonsDisabled(true);
+  showSyncStatus('Importando...', 'success');
+  const result = await sendMessage({ type: 'IMPORT_DATA', base64 });
+  setSyncButtonsDisabled(false);
+  if (result?.success) {
+    showSyncStatus('Dados importados com sucesso!', 'success');
+    // Recarrega UI
+    loadDefaultZoom();
+    loadPresets();
+  } else {
+    showSyncStatus(`Erro: ${result?.error || 'Import failed'}`, 'error');
+  }
+});
+
+/**
+ * Envia mensagem ao background e retorna promessa.
+ */
+function sendMessage(message) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      if (chrome.runtime.lastError) {
+        resolve(null);
+      } else {
+        resolve(response);
+      }
+    });
+  });
+}
+
 // Carregar ao iniciar
 loadDefaultZoom();
 loadPresets();
+loadSupabaseConfig();

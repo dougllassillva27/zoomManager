@@ -235,6 +235,138 @@ input[type="number"]:focus {
   text-shadow: 0 0 6px rgba(255, 68, 102, 0.3);
 }
 
+/* Sync Warning Banner */
+.sync-warning {
+  background: rgba(255, 170, 0, 0.1);
+  border: 1px solid #ffaa00;
+  border-radius: 8px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  font-size: 12px;
+  color: #ffcc44;
+  line-height: 1.6;
+  display: none;
+}
+
+.sync-warning.visible {
+  display: block;
+}
+
+/* Supabase Config Section */
+.config-field {
+  margin-bottom: 14px;
+}
+
+.config-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.config-field input[type="text"],
+.config-field input[type="password"] {
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.config-field input[type="text"]:focus,
+.config-field input[type="password"]:focus {
+  border-color: var(--accent-primary);
+  box-shadow: var(--glow-subtle);
+}
+
+.config-field input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.5;
+}
+
+.btn-danger {
+  border-color: var(--error) !important;
+  color: var(--error) !important;
+}
+
+.btn-danger:hover {
+  background: rgba(255, 68, 102, 0.1) !important;
+  box-shadow: 0 0 8px rgba(255, 68, 102, 0.3) !important;
+}
+
+/* Sync Section */
+.sync-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.btn-action {
+  flex: 1;
+  padding: 10px 12px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-action:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  box-shadow: var(--glow-subtle);
+}
+
+.btn-action:active {
+  background: rgba(0, 255, 255, 0.05);
+}
+
+.btn-action:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+.sync-textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  resize: vertical;
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.sync-textarea:focus {
+  border-color: var(--accent-primary);
+  box-shadow: var(--glow-subtle);
+}
+
+.sync-textarea::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
 /* Number input spinners - dark style */
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {

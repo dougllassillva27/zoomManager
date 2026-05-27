@@ -30,6 +30,42 @@
       </div>
       <ul id="presets-list" class="presets-list"></ul>
     </section>
+
+    <div id="syncWarning" class="sync-warning">
+      ⚠️ Supabase não configurado. Seus dados estão salvos apenas localmente neste navegador. Configure o Supabase abaixo para sincronizar entre dispositivos.
+    </div>
+
+    <section class="setting" id="supabase-config-section">
+      <label class="label">Configuração Supabase</label>
+      <p class="description">Configure sua Project URL e Anon Key para habilitar sincronização entre dispositivos.</p>
+      <div class="config-field">
+        <label for="sbUrl" class="config-label">Project URL</label>
+        <input type="text" id="sbUrl" placeholder="https://xxxxx.supabase.co">
+      </div>
+      <div class="config-field">
+        <label for="sbKey" class="config-label">Anon Key</label>
+        <input type="password" id="sbKey" placeholder="eyJhbGci...">
+      </div>
+      <div class="sync-actions">
+        <button id="btnSaveConfig" class="btn-action">Salvar</button>
+        <button id="btnTestConfig" class="btn-action">Testar Conexão</button>
+        <button id="btnClearConfig" class="btn-action btn-danger">Limpar</button>
+      </div>
+      <div id="configStatus" class="status"></div>
+    </section>
+
+    <section class="setting" id="sync-section">
+      <label class="label">Sincronização & Backup</label>
+      <p class="description">Sincronize configurações entre dispositivos via Supabase ou exporte/importe manualmente.</p>
+      <div class="sync-actions">
+        <button id="btnSyncPush" class="btn-action">Sincronizar Agora</button>
+        <button id="btnSyncPull" class="btn-action">Puxar Configurações</button>
+        <button id="btnExport" class="btn-action">Exportar Dados</button>
+        <button id="btnImport" class="btn-action">Importar Dados</button>
+      </div>
+      <textarea id="syncTextarea" class="sync-textarea" placeholder="Dados exportados aparecerão aqui. Cole dados para importar."></textarea>
+      <div id="syncStatus" class="status"></div>
+    </section>
   </div>
 
   <script src="options.js"></script>

@@ -4,12 +4,246 @@
   "graph": {},
   "nodes": [
     {
+      "label": "background.js",
+      "file_type": "code",
+      "source_file": "extensao/background.js",
+      "source_location": "L1",
+      "id": "extensao_background_js",
+      "community": 3,
+      "norm_label": "background.js"
+    },
+    {
+      "label": "getZoomKey()",
+      "file_type": "code",
+      "source_file": "extensao/background.js",
+      "source_location": "L16",
+      "id": "extensao_background_getzoomkey",
+      "community": 3,
+      "norm_label": "getzoomkey()"
+    },
+    {
+      "label": "clampZoom()",
+      "file_type": "code",
+      "source_file": "extensao/background.js",
+      "source_location": "L29",
+      "id": "extensao_background_clampzoom",
+      "community": 3,
+      "norm_label": "clampzoom()"
+    },
+    {
+      "label": "handler()",
+      "file_type": "code",
+      "source_file": "extensao/background.js",
+      "source_location": "L35",
+      "id": "extensao_background_handler",
+      "community": 3,
+      "norm_label": "handler()"
+    },
+    {
+      "label": "buildContextMenu()",
+      "file_type": "code",
+      "source_file": "extensao/background.js",
+      "source_location": "L125",
+      "id": "extensao_background_buildcontextmenu",
+      "community": 3,
+      "norm_label": "buildcontextmenu()"
+    },
+    {
+      "label": "content.js",
+      "file_type": "code",
+      "source_file": "extensao/content.js",
+      "source_location": "L1",
+      "id": "extensao_content_js",
+      "community": 5,
+      "norm_label": "content.js"
+    },
+    {
+      "label": "sendMessage()",
+      "file_type": "code",
+      "source_file": "extensao/content.js",
+      "source_location": "L16",
+      "id": "extensao_content_sendmessage",
+      "community": 5,
+      "norm_label": "sendmessage()"
+    },
+    {
+      "label": "applyZoom()",
+      "file_type": "code",
+      "source_file": "extensao/content.js",
+      "source_location": "L32",
+      "id": "extensao_content_applyzoom",
+      "community": 5,
+      "norm_label": "applyzoom()"
+    },
+    {
+      "label": "saveZoomDebounced()",
+      "file_type": "code",
+      "source_file": "extensao/content.js",
+      "source_location": "L43",
+      "id": "extensao_content_savezoomdebounced",
+      "community": 5,
+      "norm_label": "savezoomdebounced()"
+    },
+    {
+      "label": "options.js",
+      "file_type": "code",
+      "source_file": "extensao/options.js",
+      "source_location": "L1",
+      "id": "extensao_options_js",
+      "community": 0,
+      "norm_label": "options.js"
+    },
+    {
+      "label": "showStatus()",
+      "file_type": "code",
+      "source_file": "extensao/options.js",
+      "source_location": "L15",
+      "id": "extensao_options_showstatus",
+      "community": 0,
+      "norm_label": "showstatus()"
+    },
+    {
+      "label": "saveDefaultZoom()",
+      "file_type": "code",
+      "source_file": "extensao/options.js",
+      "source_location": "L29",
+      "id": "extensao_options_savedefaultzoom",
+      "community": 0,
+      "norm_label": "savedefaultzoom()"
+    },
+    {
+      "label": "loadDefaultZoom()",
+      "file_type": "code",
+      "source_file": "extensao/options.js",
+      "source_location": "L42",
+      "id": "extensao_options_loaddefaultzoom",
+      "community": 0,
+      "norm_label": "loaddefaultzoom()"
+    },
+    {
+      "label": "loadPresets()",
+      "file_type": "code",
+      "source_file": "extensao/options.js",
+      "source_location": "L69",
+      "id": "extensao_options_loadpresets",
+      "community": 0,
+      "norm_label": "loadpresets()"
+    },
+    {
+      "label": "renderPresets()",
+      "file_type": "code",
+      "source_file": "extensao/options.js",
+      "source_location": "L75",
+      "id": "extensao_options_renderpresets",
+      "community": 0,
+      "norm_label": "renderpresets()"
+    },
+    {
+      "label": "escapeHtml()",
+      "file_type": "code",
+      "source_file": "extensao/options.js",
+      "source_location": "L96",
+      "id": "extensao_options_escapehtml",
+      "community": 0,
+      "norm_label": "escapehtml()"
+    },
+    {
+      "label": "addPreset()",
+      "file_type": "code",
+      "source_file": "extensao/options.js",
+      "source_location": "L102",
+      "id": "extensao_options_addpreset",
+      "community": 0,
+      "norm_label": "addpreset()"
+    },
+    {
+      "label": "removePreset()",
+      "file_type": "code",
+      "source_file": "extensao/options.js",
+      "source_location": "L127",
+      "id": "extensao_options_removepreset",
+      "community": 0,
+      "norm_label": "removepreset()"
+    },
+    {
+      "label": "savePresets()",
+      "file_type": "code",
+      "source_file": "extensao/options.js",
+      "source_location": "L133",
+      "id": "extensao_options_savepresets",
+      "community": 0,
+      "norm_label": "savepresets()"
+    },
+    {
+      "label": "popup.js",
+      "file_type": "code",
+      "source_file": "extensao/popup.js",
+      "source_location": "L1",
+      "id": "extensao_popup_js",
+      "community": 1,
+      "norm_label": "popup.js"
+    },
+    {
+      "label": "sendMessage()",
+      "file_type": "code",
+      "source_file": "extensao/popup.js",
+      "source_location": "L19",
+      "id": "extensao_popup_sendmessage",
+      "community": 1,
+      "norm_label": "sendmessage()"
+    },
+    {
+      "label": "getActiveTabInfo()",
+      "file_type": "code",
+      "source_file": "extensao/popup.js",
+      "source_location": "L34",
+      "id": "extensao_popup_getactivetabinfo",
+      "community": 1,
+      "norm_label": "getactivetabinfo()"
+    },
+    {
+      "label": "updateUI()",
+      "file_type": "code",
+      "source_file": "extensao/popup.js",
+      "source_location": "L47",
+      "id": "extensao_popup_updateui",
+      "community": 1,
+      "norm_label": "updateui()"
+    },
+    {
+      "label": "roundToStep2()",
+      "file_type": "code",
+      "source_file": "extensao/popup.js",
+      "source_location": "L57",
+      "id": "extensao_popup_roundtostep2",
+      "community": 1,
+      "norm_label": "roundtostep2()"
+    },
+    {
+      "label": "applyAndSave()",
+      "file_type": "code",
+      "source_file": "extensao/popup.js",
+      "source_location": "L64",
+      "id": "extensao_popup_applyandsave",
+      "community": 1,
+      "norm_label": "applyandsave()"
+    },
+    {
+      "label": "loadAndRenderPresets()",
+      "file_type": "code",
+      "source_file": "extensao/popup.js",
+      "source_location": "L111",
+      "id": "extensao_popup_loadandrenderpresets",
+      "community": 1,
+      "norm_label": "loadandrenderpresets()"
+    },
+    {
       "label": "test_git_hooks.py",
       "file_type": "code",
       "source_file": "tests/test_git_hooks.py",
       "source_location": "L1",
       "id": "tests_test_git_hooks_py",
-      "community": 0,
+      "community": 2,
       "norm_label": "test_git_hooks.py"
     },
     {
@@ -18,7 +252,7 @@
       "source_file": "tests/test_git_hooks.py",
       "source_location": "L31",
       "id": "tests_test_git_hooks_test_pre_commit_secret_detection",
-      "community": 0,
+      "community": 2,
       "norm_label": "test_pre_commit_secret_detection()"
     },
     {
@@ -27,7 +261,7 @@
       "source_file": "tests/test_git_hooks.py",
       "source_location": "L51",
       "id": "tests_test_git_hooks_test_pre_commit_protected_paths",
-      "community": 0,
+      "community": 2,
       "norm_label": "test_pre_commit_protected_paths()"
     },
     {
@@ -45,7 +279,7 @@
       "source_file": "tests/test_git_hooks.py",
       "source_location": "L32",
       "id": "tests_test_git_hooks_rationale_32",
-      "community": 0,
+      "community": 2,
       "norm_label": "garante que segredos reais sejam casados pelas regexes de seguranca."
     },
     {
@@ -54,7 +288,7 @@
       "source_file": "tests/test_git_hooks.py",
       "source_location": "L52",
       "id": "tests_test_git_hooks_rationale_52",
-      "community": 0,
+      "community": 2,
       "norm_label": "valida se caminhos protegidos e secretos sao interceptados de forma correta."
     },
     {
@@ -72,7 +306,7 @@
       "source_file": "versionamento/versionador.js",
       "source_location": "L1",
       "id": "versionamento_versionador_js",
-      "community": 1,
+      "community": 4,
       "norm_label": "versionador.js"
     },
     {
@@ -81,7 +315,7 @@
       "source_file": "versionamento/versionador.js",
       "source_location": "L30",
       "id": "versionamento_versionador_gerarhash",
-      "community": 1,
+      "community": 4,
       "norm_label": "gerarhash()"
     },
     {
@@ -90,7 +324,7 @@
       "source_file": "versionamento/versionador.js",
       "source_location": "L38",
       "id": "versionamento_versionador_processarurl",
-      "community": 1,
+      "community": 4,
       "norm_label": "processarurl()"
     },
     {
@@ -99,7 +333,7 @@
       "source_file": "versionamento/versionador.js",
       "source_location": "L73",
       "id": "versionamento_versionador_processarconteudo",
-      "community": 1,
+      "community": 4,
       "norm_label": "processarconteudo()"
     },
     {
@@ -108,7 +342,7 @@
       "source_file": "versionamento/versionador.js",
       "source_location": "L105",
       "id": "versionamento_versionador_varrerdiretorio",
-      "community": 1,
+      "community": 4,
       "norm_label": "varrerdiretorio()"
     }
   ],
@@ -116,12 +350,353 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "extensao/background.js",
+      "source_location": "L16",
+      "weight": 1.0,
+      "source": "extensao_background_js",
+      "target": "extensao_background_getzoomkey",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/background.js",
+      "source_location": "L29",
+      "weight": 1.0,
+      "source": "extensao_background_js",
+      "target": "extensao_background_clampzoom",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/background.js",
+      "source_location": "L35",
+      "weight": 1.0,
+      "source": "extensao_background_js",
+      "target": "extensao_background_handler",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/background.js",
+      "source_location": "L125",
+      "weight": 1.0,
+      "source": "extensao_background_js",
+      "target": "extensao_background_buildcontextmenu",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/background.js",
+      "source_location": "L47",
+      "weight": 1.0,
+      "source": "extensao_background_handler",
+      "target": "extensao_background_clampzoom",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/content.js",
+      "source_location": "L16",
+      "weight": 1.0,
+      "source": "extensao_content_js",
+      "target": "extensao_content_sendmessage",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/content.js",
+      "source_location": "L32",
+      "weight": 1.0,
+      "source": "extensao_content_js",
+      "target": "extensao_content_applyzoom",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/content.js",
+      "source_location": "L43",
+      "weight": 1.0,
+      "source": "extensao_content_js",
+      "target": "extensao_content_savezoomdebounced",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/content.js",
+      "source_location": "L33",
+      "weight": 1.0,
+      "source": "extensao_content_applyzoom",
+      "target": "extensao_content_sendmessage",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L15",
+      "weight": 1.0,
+      "source": "extensao_options_js",
+      "target": "extensao_options_showstatus",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L29",
+      "weight": 1.0,
+      "source": "extensao_options_js",
+      "target": "extensao_options_savedefaultzoom",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L42",
+      "weight": 1.0,
+      "source": "extensao_options_js",
+      "target": "extensao_options_loaddefaultzoom",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L69",
+      "weight": 1.0,
+      "source": "extensao_options_js",
+      "target": "extensao_options_loadpresets",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L75",
+      "weight": 1.0,
+      "source": "extensao_options_js",
+      "target": "extensao_options_renderpresets",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L96",
+      "weight": 1.0,
+      "source": "extensao_options_js",
+      "target": "extensao_options_escapehtml",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L102",
+      "weight": 1.0,
+      "source": "extensao_options_js",
+      "target": "extensao_options_addpreset",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L127",
+      "weight": 1.0,
+      "source": "extensao_options_js",
+      "target": "extensao_options_removepreset",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L133",
+      "weight": 1.0,
+      "source": "extensao_options_js",
+      "target": "extensao_options_savepresets",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L33",
+      "weight": 1.0,
+      "source": "extensao_options_savedefaultzoom",
+      "target": "extensao_options_showstatus",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L107",
+      "weight": 1.0,
+      "source": "extensao_options_addpreset",
+      "target": "extensao_options_showstatus",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L130",
+      "weight": 1.0,
+      "source": "extensao_options_removepreset",
+      "target": "extensao_options_showstatus",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L72",
+      "weight": 1.0,
+      "source": "extensao_options_loadpresets",
+      "target": "extensao_options_renderpresets",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L135",
+      "weight": 1.0,
+      "source": "extensao_options_savepresets",
+      "target": "extensao_options_renderpresets",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L121",
+      "weight": 1.0,
+      "source": "extensao_options_addpreset",
+      "target": "extensao_options_savepresets",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/options.js",
+      "source_location": "L129",
+      "weight": 1.0,
+      "source": "extensao_options_removepreset",
+      "target": "extensao_options_savepresets",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/popup.js",
+      "source_location": "L19",
+      "weight": 1.0,
+      "source": "extensao_popup_js",
+      "target": "extensao_popup_sendmessage",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/popup.js",
+      "source_location": "L34",
+      "weight": 1.0,
+      "source": "extensao_popup_js",
+      "target": "extensao_popup_getactivetabinfo",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/popup.js",
+      "source_location": "L47",
+      "weight": 1.0,
+      "source": "extensao_popup_js",
+      "target": "extensao_popup_updateui",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/popup.js",
+      "source_location": "L57",
+      "weight": 1.0,
+      "source": "extensao_popup_js",
+      "target": "extensao_popup_roundtostep2",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/popup.js",
+      "source_location": "L64",
+      "weight": 1.0,
+      "source": "extensao_popup_js",
+      "target": "extensao_popup_applyandsave",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/popup.js",
+      "source_location": "L111",
+      "weight": 1.0,
+      "source": "extensao_popup_js",
+      "target": "extensao_popup_loadandrenderpresets",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/popup.js",
+      "source_location": "L69",
+      "weight": 1.0,
+      "source": "extensao_popup_applyandsave",
+      "target": "extensao_popup_sendmessage",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "extensao/popup.js",
+      "source_location": "L112",
+      "weight": 1.0,
+      "source": "extensao_popup_loadandrenderpresets",
+      "target": "extensao_popup_sendmessage",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "tests/test_git_hooks.py",
       "source_location": "L31",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_git_hooks_py",
-      "target": "tests_test_git_hooks_test_pre_commit_secret_detection",
-      "confidence_score": 1.0
+      "target": "tests_test_git_hooks_test_pre_commit_secret_detection"
     },
     {
       "relation": "contains",
@@ -129,9 +704,9 @@
       "source_file": "tests/test_git_hooks.py",
       "source_location": "L51",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_git_hooks_py",
-      "target": "tests_test_git_hooks_test_pre_commit_protected_paths",
-      "confidence_score": 1.0
+      "target": "tests_test_git_hooks_test_pre_commit_protected_paths"
     },
     {
       "relation": "contains",
@@ -139,9 +714,9 @@
       "source_file": "tests/test_git_hooks.py",
       "source_location": "L80",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_git_hooks_py",
-      "target": "tests_test_git_hooks_test_commit_msg_validation",
-      "confidence_score": 1.0
+      "target": "tests_test_git_hooks_test_commit_msg_validation"
     },
     {
       "relation": "rationale_for",
@@ -149,9 +724,9 @@
       "source_file": "tests/test_git_hooks.py",
       "source_location": "L32",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_git_hooks_rationale_32",
-      "target": "tests_test_git_hooks_test_pre_commit_secret_detection",
-      "confidence_score": 1.0
+      "target": "tests_test_git_hooks_test_pre_commit_secret_detection"
     },
     {
       "relation": "rationale_for",
@@ -159,9 +734,9 @@
       "source_file": "tests/test_git_hooks.py",
       "source_location": "L52",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_git_hooks_rationale_52",
-      "target": "tests_test_git_hooks_test_pre_commit_protected_paths",
-      "confidence_score": 1.0
+      "target": "tests_test_git_hooks_test_pre_commit_protected_paths"
     },
     {
       "relation": "rationale_for",
@@ -169,9 +744,9 @@
       "source_file": "tests/test_git_hooks.py",
       "source_location": "L81",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "tests_test_git_hooks_rationale_81",
-      "target": "tests_test_git_hooks_test_commit_msg_validation",
-      "confidence_score": 1.0
+      "target": "tests_test_git_hooks_test_commit_msg_validation"
     },
     {
       "relation": "contains",
@@ -179,9 +754,9 @@
       "source_file": "versionamento/versionador.js",
       "source_location": "L30",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "versionamento_versionador_js",
-      "target": "versionamento_versionador_gerarhash",
-      "confidence_score": 1.0
+      "target": "versionamento_versionador_gerarhash"
     },
     {
       "relation": "contains",
@@ -189,9 +764,9 @@
       "source_file": "versionamento/versionador.js",
       "source_location": "L38",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "versionamento_versionador_js",
-      "target": "versionamento_versionador_processarurl",
-      "confidence_score": 1.0
+      "target": "versionamento_versionador_processarurl"
     },
     {
       "relation": "contains",
@@ -199,9 +774,9 @@
       "source_file": "versionamento/versionador.js",
       "source_location": "L73",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "versionamento_versionador_js",
-      "target": "versionamento_versionador_processarconteudo",
-      "confidence_score": 1.0
+      "target": "versionamento_versionador_processarconteudo"
     },
     {
       "relation": "contains",
@@ -209,9 +784,9 @@
       "source_file": "versionamento/versionador.js",
       "source_location": "L105",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "versionamento_versionador_js",
-      "target": "versionamento_versionador_varrerdiretorio",
-      "confidence_score": 1.0
+      "target": "versionamento_versionador_varrerdiretorio"
     },
     {
       "relation": "calls",
@@ -220,10 +795,11 @@
       "source_file": "versionamento/versionador.js",
       "source_location": "L54",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "versionamento_versionador_processarurl",
-      "target": "versionamento_versionador_gerarhash",
-      "confidence_score": 1.0
+      "target": "versionamento_versionador_gerarhash"
     }
   ],
-  "hyperedges": []
+  "hyperedges": [],
+  "built_at_commit": "588f849b1b123799613a1a0e85c3d56f8ab95a91"
 }
