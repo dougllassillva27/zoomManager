@@ -26,9 +26,12 @@ Opera inteiramente no contexto do navegador. O backend Supabase é opcional e co
 - Step de 2% com arredondamento via `roundToStep2()`
 - Presets customizáveis (até 8 níveis predefinidos)
 - Zoom padrão configurável para reset
+- Smart Zoom Automático por resolução de tela (match exato)
 - Menu de contexto (botão direito) com presets e reset
+- Options Page com layout grid 4 colunas responsivo
 - Design system Dark Amoled OLED com CSS variables
 - Scrollbar e spinners estilizados via `color-scheme: dark`
+- Upsert seguro via on_conflict no Supabase REST API
 
 ## Arquitetura
 
@@ -45,7 +48,8 @@ Chrome Browser
    │     ├── Aplica chrome.tabs.setZoom
    │     ├── Handlers: GET/SAVE/RESET/APPLY_ZOOM
    │     ├── Handlers: GET/SAVE/APPLY_PRESETS
-   │     ├── Supabase REST Client (dinâmico)
+   │     ├── Handlers: GET/SAVE/DELETE/APPLY_SMART_ZOOM
+   │     ├── Supabase REST Client (dinâmico + upsert)
    │     ├── SYNC_PUSH/SYNC_PULL/EXPORT/IMPORT
    │     ├── Auto-sync via chrome.alarms (60min)
    │     ├── Context Menu (presets + reset)
@@ -58,9 +62,11 @@ Chrome Browser
    │     └── Sync via onZoomChange + storage.onChanged
    │
    └── Options Page (options.html/css/js)
-         ├── Configuração Supabase (URL + Key)
+         ├── Grid 4 colunas responsivo
          ├── Zoom padrão customizável
          ├── CRUD de presets
+         ├── Smart Zoom por resolução (Detectar)
+         ├── Configuração Supabase (URL + Key)
          └── Sync/Export/Import
 ```
 
@@ -76,9 +82,9 @@ extensao/
 ├── popup.js             # Slider/input, presets, sync listeners
 ├── options.html         # Página de configurações
 ├── options.css          # Estilos Dark Amoled para options
-├── options.js           # Config Supabase, presets, sync/export/import
+├── options.js           # Config Supabase, presets, smart zoom, sync/export/import
 ├── sql/
-│   └── setup.sql        # Schema Supabase (zoom_settings + presets)
+│   └── setup.sql        # Schema Supabase (zoom_settings + presets + smart_zoom_profiles)
 └── icons/               # Ícones PNG (16, 32, 48, 128px)
 ```
 
@@ -88,7 +94,7 @@ extensao/
 Declaração Manifest V3 com permissões `storage`, `activeTab`, `contextMenus`, `alarms` e `host_permissions` para Supabase. Content scripts para `<all_urls>`, service worker, popup, options page e comandos de teclado (`Ctrl+Shift+Z` para popup, `Alt+Shift+R` para reset).
 
 ### `background.js`
-Service Worker responsável por toda a lógica de persistência, sincronização e aplicação de zoom. Expõe handlers via `chrome.runtime.onMessage`: `GET_ZOOM`, `SAVE_ZOOM`, `RESET_ZOOM`, `APPLY_ZOOM`, `GET_PRESETS`, `SAVE_PRESETS`, `APPLY_PRESET`, `SYNC_PUSH`, `SYNC_PULL`, `EXPORT_DATA`, `IMPORT_DATA`, `SAVE_SUPABASE_CONFIG`, `GET_SUPABASE_CONFIG`, `CLEAR_SUPABASE_CONFIG`, `TEST_SUPABASE`. Inclui cliente Supabase dinâmico (lê credenciais do `chrome.storage.local`), auto-sync via `chrome.alarms` a cada 60min, e menu de contexto com presets e reset.
+Service Worker responsável por toda a lógica de persistência, sincronização e aplicação de zoom. Expõe handlers via `chrome.runtime.onMessage`: `GET_ZOOM`, `SAVE_ZOOM`, `RESET_ZOOM`, `APPLY_ZOOM`, `GET_PRESETS`, `SAVE_PRESETS`, `APPLY_PRESET`, `GET_SMART_PROFILES`, `SAVE_SMART_PROFILES`, `DELETE_SMART_PROFILE`, `APPLY_SMART_ZOOM`, `SYNC_PUSH`, `SYNC_PULL`, `EXPORT_DATA`, `IMPORT_DATA`, `SAVE_SUPABASE_CONFIG`, `GET_SUPABASE_CONFIG`, `CLEAR_SUPABASE_CONFIG`, `TEST_SUPABASE`. Inclui cliente Supabase dinâmico com upsert via `on_conflict`, auto-sync via `chrome.alarms` a cada 60min, e menu de contexto com presets e reset.
 
 ### `content.js`
 Content Script injetado em todas as páginas. Intercepta eventos `wheel` com `ctrlKey: true` usando `{ passive: false, capture: true }` para prevenir o comportamento nativo do Chrome. Calcula delta com step de 0.02, aplica clamp entre 0.25 e 5.0, e envia mensagens ao background. Restaura zoom salvo ao carregar via `requestAnimationFrame`.
@@ -97,7 +103,7 @@ Content Script injetado em todas as páginas. Intercepta eventos `wheel` com `ct
 Interface de ajuste fino com slider (range 26–500%, step 2), input numérico sincronizado, grid de presets em 2 colunas e botão reset. Usa `tabId` explícito obtido via `chrome.tabs.query` para aplicar zoom instantaneamente sem necessidade de recarregar a página. Design system Dark Amoled com CSS variables.
 
 ### `options.html/css/js`
-Página de configurações acessível via clique direito no ícone da extensão. Seções: Configuração Supabase (URL + Anon Key com teste de conexão), Zoom Padrão para reset (`__defaultZoom`), CRUD de Presets (`__zoomPresets`, max 8), e Sincronização & Backup (Sync Push/Pull, Export/Import com compressão gzip + base64). Banner de aviso visível quando Supabase não está configurado.
+Página de configurações com layout grid 4 colunas responsivo (colapsa para 2 em ≤1000px, 1 em ≤600px). Coluna 1: Zoom Padrão para reset (`__defaultZoom`). Coluna 2: CRUD de Presets (`__zoomPresets`, max 8). Coluna 3: Smart Zoom Automático com botão Detectar resolução (`screen.width/height`) e perfis por resolução exata. Coluna 4: Configuração Supabase (URL + Anon Key com teste de conexão). Seção full-width: Sincronização & Backup (Sync Push/Pull, Export/Import com compressão gzip + base64). Banner de aviso visível quando Supabase não está configurado.
 
 ## Fluxo Principal da Aplicação
 
@@ -111,10 +117,11 @@ Página de configurações acessível via clique direito no ícone da extensão.
 7. Ajuste via popup → APPLY_ZOOM com tabId explícito → SAVE_ZOOM
 8. Reset (Alt+Shift+R ou botão) → lê __defaultZoom → aplica e remove chave do domínio
 9. Presets definidos em Options → aparecem como botões no popup → aplicação instantânea
-10. Usuário configura Supabase na Options Page → credenciais salvas em chrome.storage.local
-11. Sync Push envia dados locais ao Supabase | Sync Pull puxa dados remotos
-12. Auto-sync executa PUSH silencioso a cada 60min via chrome.alarms
-13. Export gera base64 comprimido | Import restaura de base64
+10. Smart Zoom detecta resolução (screen.width/height) → aplica zoom se domínio sem zoom manual
+11. Usuário configura Supabase na Options Page → credenciais salvas em chrome.storage.local
+12. Sync Push envia dados locais ao Supabase (upsert via on_conflict) | Sync Pull puxa dados remotos
+13. Auto-sync executa PUSH silencioso a cada 60min via chrome.alarms
+14. Export gera base64 comprimido | Import restaura de base64
 ```
 
 ## Persistência
@@ -124,7 +131,8 @@ Página de configurações acessível via clique direito no ícone da extensão.
 - **Chave por domínio**: `{hostname}: number` — nível de zoom salvo (ex: `"github.com": 1.2`)
 - **`__defaultZoom`**: Nível de zoom padrão para reset (fallback: 1.0)
 - **`__zoomPresets`**: Array de objetos `{ label: string, level: number }` (max 8)
-- **Supabase (opcional)**: Tabelas `zoom_settings` e `presets` via REST API. Fallback automático para storage local quando não configurado.
+- **`__smartZoomProfiles`**: Array de objetos `{ resolution_width, resolution_height, zoom_level }` (match exato por resolução)
+- **Supabase (opcional)**: Tabelas `zoom_settings`, `presets` e `smart_zoom_profiles` via REST API com upsert (`on_conflict`). Fallback automático para storage local quando não configurado.
 
 ## Segurança e Privacidade
 
@@ -147,8 +155,11 @@ CRUD completo em Options Page com validação de limites. Presets renderizados d
 ### Restauração Automática
 Listener `chrome.tabs.onUpdated` no background detecta `status: 'complete'` e restaura zoom salvo para o hostname da aba. Content Script também restaura via mensagem `GET_ZOOM` ao carregar.
 
+### Smart Zoom Automático
+Detecta resolução do monitor via `screen.width/height` no Content Script. Busca perfil por match exato em `__smartZoomProfiles`. Aplica apenas quando domínio NÃO possui zoom manual salvo (prioridade manual). Salva zoom aplicado no domínio para persistir com F5. Perfil default: Full HD 1920x1080 → 74%. Botão "Detectar" na Options Page preenche resolução automaticamente.
+
 ### Sincronização Supabase
-Cliente REST dinâmico lê credenciais do `chrome.storage.local` a cada chamada. Handlers `SYNC_PUSH` (POST/UPSERT) e `SYNC_PULL` (GET + merge) com tratamento de respostas 204 No Content. Auto-sync via `chrome.alarms` a cada 60min. Fallback gracioso: quando Supabase não está configurado ou offline, todas as operações continuam funcionando localmente.
+Cliente REST dinâmico lê credenciais do `chrome.storage.local` a cada chamada. Handlers `SYNC_PUSH` (POST com `?on_conflict` para upsert seguro) e `SYNC_PULL` (GET + merge) com tratamento de respostas 204 No Content. Dedup defensiva por Set antes do envio e após recebimento. Auto-sync via `chrome.alarms` a cada 60min. Sincroniza 3 tabelas: `zoom_settings`, `presets`, `smart_zoom_profiles`. Fallback gracioso: quando Supabase não está configurado ou offline, todas as operações continuam funcionando localmente.
 
 ### Export/Import
 Compressão gzip nativa via Compression Streams API. Export serializa todo o storage local para base64. Import descomprime, valida estrutura e restaura dados. Funciona independentemente do Supabase.
@@ -204,6 +215,9 @@ Validações manuais recomendadas:
 11. Sync Pull em outro navegador restaura configurações
 12. Export gera base64 → Import restaura em outro dispositivo
 13. Sem Supabase configurado → banner warning visível, dados locais funcionam
+14. Smart Zoom aplica automaticamente em domínio sem zoom manual salvo
+15. Botão Detectar na Options preenche resolução do monitor atual
+16. Options Page grid 4 colunas responsivo (2 cols ≤1000px, 1 col ≤600px)
 ```
 
 Testes automatizados existem para git hooks:
@@ -226,6 +240,9 @@ pytest tests/test_git_hooks.py
 - **`chrome.storage.local` para credenciais**: Separação intencional — credenciais não devem sincronizar via `chrome.storage.sync`.
 - **Compression Streams API nativa**: Evita dependência externa para compressão gzip; suportado nativamente no Chrome.
 - **RLS desabilitado temporariamente**: Anon key sem user auth requer RLS off; migrar para auth de usuário antes de produção.
+- **Upsert via `?on_conflict`**: PostgREST ignora `Prefer: resolution=merge-duplicates` sem constraint UNIQUE composta; parâmetro `on_conflict` força upsert nativo.
+- **Smart Zoom com prioridade manual**: Zoom manual sempre prevalece sobre Smart Zoom; verificação `GET_ZOOM !== 1.0` antes de aplicar perfil automático.
+- **Grid 4 colunas CSS**: Layout responsivo com `repeat(4, 1fr)` e breakpoints progressivos para melhor aproveitamento da viewport.
 
 ## 📄 Licença
 

@@ -232,7 +232,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }));
 
           if (zoomEntries.length > 0) {
-            const zoomResult = await supabaseRequest('/rest/v1/zoom_settings', {
+            const zoomResult = await supabaseRequest('/rest/v1/zoom_settings?on_conflict=hostname', {
               method: 'POST',
               headers: { 'Prefer': 'resolution=merge-duplicates' },
               body: JSON.stringify(zoomEntries)
@@ -243,15 +243,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           }
 
-          // Push presets
+          // Push presets (dedup por label+level antes do envio)
           if (presets.length > 0) {
-            const presetEntries = presets.map((p, i) => ({
+            const seen = new Set();
+            const uniquePresets = presets.filter(p => {
+              const key = `${p.label}|${p.level}`;
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            });
+            const presetEntries = uniquePresets.map((p, i) => ({
               label: p.label,
               level: p.level,
               sort_order: i,
               updated_at: new Date().toISOString()
             }));
-            const presetResult = await supabaseRequest('/rest/v1/presets', {
+            const presetResult = await supabaseRequest('/rest/v1/presets?on_conflict=label,level', {
               method: 'POST',
               headers: { 'Prefer': 'resolution=merge-duplicates' },
               body: JSON.stringify(presetEntries)
@@ -262,11 +269,94 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }
           }
 
+          // Push smart_zoom_profiles
+          const smartProfiles = allData['__smartZoomProfiles'] ?? [];
+          if (smartProfiles.length > 0) {
+            const smartEntries = smartProfiles.map((p, i) => ({
+              resolution_width: p.resolution_width,
+              resolution_height: p.resolution_height,
+              zoom_level: p.zoom_level,
+              sort_order: i,
+              updated_at: new Date().toISOString()
+            }));
+            const smartResult = await supabaseRequest('/rest/v1/smart_zoom_profiles', {
+              method: 'POST',
+              headers: { 'Prefer': 'resolution=merge-duplicates' },
+              body: JSON.stringify(smartEntries)
+            });
+            if (smartResult.error) {
+              console.error('[Supabase] SYNC_PUSH smart_zoom_profiles error:', smartResult.error);
+              return { success: false, error: smartResult.error, timestamp: new Date().toISOString() };
+            }
+          }
+
           return { success: true, timestamp: new Date().toISOString() };
         } catch (err) {
           console.error('[Supabase] SYNC_PUSH error:', err);
           return { success: false, error: 'OFFLINE', timestamp: new Date().toISOString() };
         }
+      }
+
+      case 'GET_SMART_PROFILES': {
+        const result = await chrome.storage.sync.get('__smartZoomProfiles');
+        const profiles = result['__smartZoomProfiles'] ?? [];
+        // Se vazio, retorna default Full HD 74%
+        if (profiles.length === 0) {
+          return [{ resolution_width: 1920, resolution_height: 1080, zoom_level: 0.74 }];
+        }
+        return profiles;
+      }
+
+      case 'SAVE_SMART_PROFILES': {
+        const { profiles } = message;
+        if (!Array.isArray(profiles)) return false;
+        // Validação: max 20 perfis, zoom 0.25-5.0, width/height > 0
+        const validated = profiles.slice(0, 20).map((p, i) => ({
+          resolution_width: Math.max(1, Math.round(p.resolution_width || 1920)),
+          resolution_height: Math.max(1, Math.round(p.resolution_height || 1080)),
+          zoom_level: clampZoom(p.zoom_level || 1.0),
+          sort_order: i
+        }));
+        await chrome.storage.sync.set({ '__smartZoomProfiles': validated });
+        return validated;
+      }
+
+      case 'DELETE_SMART_PROFILE': {
+        const { index } = message;
+        if (typeof index !== 'number') return false;
+        const result = await chrome.storage.sync.get('__smartZoomProfiles');
+        const profiles = result['__smartZoomProfiles'] ?? [];
+        if (index < 0 || index >= profiles.length) return false;
+        profiles.splice(index, 1);
+        // Reordena sort_order
+        profiles.forEach((p, i) => { p.sort_order = i; });
+        await chrome.storage.sync.set({ '__smartZoomProfiles': profiles });
+        return profiles;
+      }
+
+      case 'APPLY_SMART_ZOOM': {
+        const { width, height, tabId } = message;
+        const targetTabId = tabId ?? sender.tab?.id;
+        if (targetTabId == null || !width || !height) return { applied: false };
+        // Busca perfis
+        const szResult = await chrome.storage.sync.get('__smartZoomProfiles');
+        let profiles = szResult['__smartZoomProfiles'] ?? [];
+        if (profiles.length === 0) {
+          profiles = [{ resolution_width: 1920, resolution_height: 1080, zoom_level: 0.74 }];
+        }
+        // Match exato por resolução
+        const match = profiles.find(p => p.resolution_width === width && p.resolution_height === height);
+        if (!match) return { applied: false };
+        // Aplica zoom
+        await chrome.tabs.setZoom(targetTabId, clampZoom(match.zoom_level));
+        // Salva no domínio para persistir com F5
+        if (sender.tab?.url) {
+          const hostname = getZoomKey(sender.tab.url);
+          if (hostname) {
+            await chrome.storage.sync.set({ [hostname]: clampZoom(match.zoom_level) });
+          }
+        }
+        return { applied: true, level: match.zoom_level };
       }
 
       case 'SAVE_SUPABASE_CONFIG': {
@@ -367,9 +457,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
 
           if (presetResult.data && presetResult.data.length > 0) {
-            updates['__zoomPresets'] = presetResult.data.map(p => ({
-              label: p.label,
-              level: p.level
+            const seenPull = new Set();
+            updates['__zoomPresets'] = presetResult.data
+              .map(p => ({ label: p.label, level: p.level }))
+              .filter(p => {
+                const key = `${p.label}|${p.level}`;
+                if (seenPull.has(key)) return false;
+                seenPull.add(key);
+                return true;
+              });
+          }
+
+          // Pull smart_zoom_profiles
+          const smartResult = await supabaseRequest('/rest/v1/smart_zoom_profiles?select=resolution_width,resolution_height,zoom_level,sort_order&order=sort_order.asc');
+          if (smartResult.error) {
+            console.error('[Supabase] SYNC_PULL smart_zoom_profiles error:', smartResult.error);
+            return { success: false, error: smartResult.error, timestamp: new Date().toISOString() };
+          }
+          if (smartResult.data && smartResult.data.length > 0) {
+            updates['__smartZoomProfiles'] = smartResult.data.map(p => ({
+              resolution_width: p.resolution_width,
+              resolution_height: p.resolution_height,
+              zoom_level: p.zoom_level,
+              sort_order: p.sort_order
             }));
           }
 
@@ -457,7 +567,15 @@ chrome.runtime.onInstalled.addListener(async () => {
       }
     }
     if (presetResult.data && presetResult.data.length > 0) {
-      updates['__zoomPresets'] = presetResult.data.map(p => ({ label: p.label, level: p.level }));
+      const seenInstall = new Set();
+      updates['__zoomPresets'] = presetResult.data
+        .map(p => ({ label: p.label, level: p.level }))
+        .filter(p => {
+          const key = `${p.label}|${p.level}`;
+          if (seenInstall.has(key)) return false;
+          seenInstall.add(key);
+          return true;
+        });
     }
     if (Object.keys(updates).length > 0) {
       await chrome.storage.sync.set(updates);
@@ -502,7 +620,14 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     }
 
     if (presets.length > 0) {
-      const presetEntries = presets.map((p, i) => ({
+      const seenAlarm = new Set();
+      const uniqueAlarmPresets = presets.filter(p => {
+        const key = `${p.label}|${p.level}`;
+        if (seenAlarm.has(key)) return false;
+        seenAlarm.add(key);
+        return true;
+      });
+      const presetEntries = uniqueAlarmPresets.map((p, i) => ({
         label: p.label,
         level: p.level,
         sort_order: i,
@@ -512,6 +637,23 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
         method: 'POST',
         headers: { 'Prefer': 'resolution=merge-duplicates' },
         body: JSON.stringify(presetEntries)
+      });
+    }
+
+    // Auto-sync smart_zoom_profiles
+    const smartProfiles = allData['__smartZoomProfiles'] ?? [];
+    if (smartProfiles.length > 0) {
+      const smartEntries = smartProfiles.map((p, i) => ({
+        resolution_width: p.resolution_width,
+        resolution_height: p.resolution_height,
+        zoom_level: p.zoom_level,
+        sort_order: i,
+        updated_at: new Date().toISOString()
+      }));
+      await supabaseRequest('/rest/v1/smart_zoom_profiles', {
+        method: 'POST',
+        headers: { 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify(smartEntries)
       });
     }
 

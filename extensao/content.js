@@ -83,12 +83,22 @@ window.addEventListener(
 
   const savedZoom = await sendMessage({ type: 'GET_ZOOM', hostname });
   if (savedZoom != null && savedZoom !== 1.0) {
+    // Zoom manual salvo tem prioridade sobre Smart Zoom
     currentZoom = savedZoom;
-    // Pequeno delay para garantir que a página está pronta
     requestAnimationFrame(() => {
       applyZoom(savedZoom);
     });
   } else {
-    currentZoom = 1.0;
+    // Sem zoom manual: tenta Smart Zoom por resolução
+    const smartResult = await sendMessage({
+      type: 'APPLY_SMART_ZOOM',
+      width: screen.width,
+      height: screen.height
+    });
+    if (smartResult?.applied) {
+      currentZoom = smartResult.level;
+    } else {
+      currentZoom = 1.0;
+    }
   }
 })();

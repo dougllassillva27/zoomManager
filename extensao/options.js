@@ -117,6 +117,14 @@ async function addPreset() {
   }
 
   level = Math.round(level / 2) * 2;
+
+  // Verifica duplicata por label+level
+  const exists = currentPresets.some(p => p.label === label && p.level === level);
+  if (exists) {
+    showStatus('Preset já existe.', 'error');
+    return;
+  }
+
   currentPresets.push({ label, level });
   await savePresets();
   presetLabelInput.value = '';
@@ -136,6 +144,94 @@ async function savePresets() {
 }
 
 addPresetBtn.addEventListener('click', addPreset);
+
+// --- Smart Zoom Profiles CRUD ---
+const btnDetectResolution = document.getElementById('btnDetectResolution');
+const szWidthInput = document.getElementById('szWidth');
+const szHeightInput = document.getElementById('szHeight');
+const szZoomLevelInput = document.getElementById('szZoomLevel');
+const addSmartProfileBtn = document.getElementById('addSmartProfileBtn');
+const smartProfilesListEl = document.getElementById('smart-profiles-list');
+
+let currentSmartProfiles = [];
+
+async function loadSmartProfiles() {
+  const profiles = await sendMessage({ type: 'GET_SMART_PROFILES' });
+  currentSmartProfiles = profiles ?? [];
+  renderSmartProfiles();
+}
+
+function renderSmartProfiles() {
+  smartProfilesListEl.innerHTML = '';
+  currentSmartProfiles.forEach((profile, index) => {
+    const li = document.createElement('li');
+    li.className = 'preset-item';
+    const zoomPercent = Math.round(profile.zoom_level * 100);
+    li.innerHTML = `
+      <div class="preset-info">
+        <span class="preset-label">${profile.resolution_width}x${profile.resolution_height}</span>
+        <span class="preset-level">${zoomPercent}%</span>
+      </div>
+      <button class="btn-remove" data-index="${index}">Remover</button>
+    `;
+    smartProfilesListEl.appendChild(li);
+  });
+
+  smartProfilesListEl.querySelectorAll('.btn-remove').forEach(btn => {
+    btn.addEventListener('click', () => deleteSmartProfile(parseInt(btn.dataset.index)));
+  });
+}
+
+btnDetectResolution.addEventListener('click', () => {
+  szWidthInput.value = screen.width;
+  szHeightInput.value = screen.height;
+});
+
+addSmartProfileBtn.addEventListener('click', async () => {
+  const width = parseInt(szWidthInput.value, 10);
+  const height = parseInt(szHeightInput.value, 10);
+  let zoomPercent = parseInt(szZoomLevelInput.value, 10);
+
+  if (!width || !height || width <= 0 || height <= 0) {
+    showStatus('Clique em "Detectar" para preencher a resolução.', 'error');
+    return;
+  }
+  if (isNaN(zoomPercent) || zoomPercent < 25 || zoomPercent > 500) {
+    showStatus('Zoom deve ser entre 25 e 500.', 'error');
+    return;
+  }
+
+  zoomPercent = Math.round(zoomPercent / 2) * 2;
+  const zoomLevel = zoomPercent / 100;
+
+  // Verifica duplicata
+  const existing = currentSmartProfiles.findIndex(p => p.resolution_width === width && p.resolution_height === height);
+  if (existing >= 0) {
+    // Atualiza existente
+    currentSmartProfiles[existing].zoom_level = zoomLevel;
+  } else {
+    currentSmartProfiles.push({ resolution_width: width, resolution_height: height, zoom_level: zoomLevel });
+  }
+
+  const result = await sendMessage({ type: 'SAVE_SMART_PROFILES', profiles: currentSmartProfiles });
+  if (result) {
+    currentSmartProfiles = result;
+    renderSmartProfiles();
+    showStatus('Perfil Smart Zoom salvo!', 'success');
+    szWidthInput.value = '';
+    szHeightInput.value = '';
+    szZoomLevelInput.value = '74';
+  }
+});
+
+async function deleteSmartProfile(index) {
+  const result = await sendMessage({ type: 'DELETE_SMART_PROFILE', index });
+  if (result) {
+    currentSmartProfiles = result;
+    renderSmartProfiles();
+    showStatus('Perfil removido.', 'success');
+  }
+}
 
 // --- Supabase Config ---
 const syncWarningEl = document.getElementById('syncWarning');
@@ -347,4 +443,5 @@ function sendMessage(message) {
 // Carregar ao iniciar
 loadDefaultZoom();
 loadPresets();
+loadSmartProfiles();
 loadSupabaseConfig();

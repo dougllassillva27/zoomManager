@@ -8,55 +8,90 @@
   <div class="container">
     <h1 class="title">Configurações do Zoom Manager</h1>
 
-    <div class="setting">
-      <label for="defaultZoom" class="label">Zoom Padrão (%)</label>
-      <p class="description">Valor aplicado ao resetar (Ctrl+0). Range: 25–500%.</p>
-      <div class="input-row">
-        <input type="number" id="defaultZoom" min="25" max="500" step="1" value="100">
-        <span class="unit">%</span>
-      </div>
-    </div>
-
     <div id="status" class="status"></div>
 
-    <section class="setting" id="presets-section">
-      <label class="label">Presets de Zoom</label>
-      <p class="description">Salve até 8 níveis predefinidos. Eles aparecerão como botões no popup.</p>
-      <div class="input-row preset-add-row">
-        <input type="text" id="presetLabel" maxlength="20" placeholder="Label (ex: Leitura)">
-        <input type="number" id="presetLevel" min="25" max="500" step="2" value="100">
-        <span class="unit">%</span>
-        <button id="addPresetBtn" class="btn-add">+</button>
-      </div>
-      <ul id="presets-list" class="presets-list"></ul>
-    </section>
+    <!-- Grid Principal: 4 colunas -->
+    <div class="settings-grid">
 
-    <div id="syncWarning" class="sync-warning">
-      ⚠️ Supabase não configurado. Seus dados estão salvos apenas localmente neste navegador. Configure o Supabase abaixo para sincronizar entre dispositivos.
+      <!-- Coluna 1: Zoom Padrão -->
+      <div class="grid-col">
+        <div class="setting">
+          <label for="defaultZoom" class="label">Zoom Padrão (%)</label>
+          <p class="description">Valor aplicado ao resetar (Alt+Shift+R). Range: 25–500%.</p>
+          <div class="input-row">
+            <input type="number" id="defaultZoom" min="25" max="500" step="1" value="100">
+            <span class="unit">%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Coluna 2: Presets de Zoom -->
+      <div class="grid-col">
+        <section class="setting" id="presets-section">
+          <label class="label">Presets de Zoom</label>
+          <p class="description">Salve até 8 níveis predefinidos. Aparecem como botões no popup.</p>
+          <div class="input-row preset-add-row">
+            <input type="text" id="presetLabel" maxlength="20" placeholder="Label">
+            <input type="number" id="presetLevel" min="25" max="500" step="2" value="100">
+            <span class="unit">%</span>
+            <button id="addPresetBtn" class="btn-add">+</button>
+          </div>
+          <ul id="presets-list" class="presets-list"></ul>
+        </section>
+      </div>
+
+      <!-- Coluna 3: Smart Zoom -->
+      <div class="grid-col">
+        <section class="setting" id="smart-zoom-section">
+          <label class="label">Smart Zoom</label>
+          <p class="description">Zoom automático por resolução. Aplica quando não há zoom manual salvo.</p>
+          <div class="input-row preset-add-row">
+            <button id="btnDetectResolution" class="btn-action" style="flex:0 0 auto;padding:10px 14px;">Detectar</button>
+            <input type="number" id="szWidth" placeholder="L" readonly style="width:70px;opacity:0.7;">
+            <span class="unit">x</span>
+            <input type="number" id="szHeight" placeholder="A" readonly style="width:70px;opacity:0.7;">
+          </div>
+          <div class="input-row preset-add-row" style="margin-top:8px;">
+            <input type="number" id="szZoomLevel" min="25" max="500" step="2" value="74" style="width:70px;">
+            <span class="unit">%</span>
+            <button id="addSmartProfileBtn" class="btn-add">+</button>
+          </div>
+          <ul id="smart-profiles-list" class="presets-list"></ul>
+        </section>
+      </div>
+
+      <!-- Coluna 4: Config Supabase -->
+      <div class="grid-col">
+        <section class="setting" id="supabase-config-section">
+          <label class="label">Supabase</label>
+          <p class="description">Configure URL e Key para sync entre dispositivos.</p>
+          <div class="config-field">
+            <label for="sbUrl" class="config-label">Project URL</label>
+            <input type="text" id="sbUrl" placeholder="https://xxx.supabase.co">
+          </div>
+          <div class="config-field">
+            <label for="sbKey" class="config-label">Anon Key</label>
+            <input type="password" id="sbKey" placeholder="eyJhbGci...">
+          </div>
+          <div class="sync-actions" style="flex-direction:column;gap:6px;">
+            <button id="btnSaveConfig" class="btn-action">Salvar</button>
+            <button id="btnTestConfig" class="btn-action">Testar</button>
+            <button id="btnClearConfig" class="btn-action btn-danger">Limpar</button>
+          </div>
+          <div id="configStatus" class="status"></div>
+        </section>
+      </div>
+
     </div>
 
-    <section class="setting" id="supabase-config-section">
-      <label class="label">Configuração Supabase</label>
-      <p class="description">Configure sua Project URL e Anon Key para habilitar sincronização entre dispositivos.</p>
-      <div class="config-field">
-        <label for="sbUrl" class="config-label">Project URL</label>
-        <input type="text" id="sbUrl" placeholder="https://xxxxx.supabase.co">
-      </div>
-      <div class="config-field">
-        <label for="sbKey" class="config-label">Anon Key</label>
-        <input type="password" id="sbKey" placeholder="eyJhbGci...">
-      </div>
-      <div class="sync-actions">
-        <button id="btnSaveConfig" class="btn-action">Salvar</button>
-        <button id="btnTestConfig" class="btn-action">Testar Conexão</button>
-        <button id="btnClearConfig" class="btn-action btn-danger">Limpar</button>
-      </div>
-      <div id="configStatus" class="status"></div>
-    </section>
+    <!-- Aviso + Sync/Backup: Full Width abaixo do grid -->
+    <div id="syncWarning" class="sync-warning">
+      ⚠️ Supabase não configurado. Seus dados estão salvos apenas localmente neste navegador.
+    </div>
 
     <section class="setting" id="sync-section">
       <label class="label">Sincronização & Backup</label>
-      <p class="description">Sincronize configurações entre dispositivos via Supabase ou exporte/importe manualmente.</p>
+      <p class="description">Sincronize via Supabase ou exporte/importe manualmente.</p>
       <div class="sync-actions">
         <button id="btnSyncPush" class="btn-action">Sincronizar Agora</button>
         <button id="btnSyncPull" class="btn-action">Puxar Configurações</button>

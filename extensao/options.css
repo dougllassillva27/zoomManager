@@ -30,8 +30,40 @@ body {
 }
 
 .container {
-  max-width: 520px;
+  max-width: 1400px;
   margin: 0 auto;
+}
+
+/* Grid Layout: 4 colunas lado a lado */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.grid-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.grid-col .setting {
+  margin-bottom: 0;
+}
+
+/* Responsivo: 2 colunas em telas médias */
+@media (max-width: 1000px) {
+  .settings-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+/* Responsivo: 1 coluna em telas pequenas */
+@media (max-width: 600px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .title {
