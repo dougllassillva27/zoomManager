@@ -233,6 +233,33 @@ async function deleteSmartProfile(index) {
   }
 }
 
+// --- PDF Default Zoom ---
+const PDF_DEFAULT_ZOOM_KEY = '__pdfDefaultZoom';
+const pdfDefaultZoomInput = document.getElementById('pdfDefaultZoom');
+
+async function loadPdfDefaultZoom() {
+  const result = await chrome.storage.sync.get(PDF_DEFAULT_ZOOM_KEY);
+  const level = result[PDF_DEFAULT_ZOOM_KEY] ?? 1.0;
+  pdfDefaultZoomInput.value = Math.round(level * 100);
+}
+
+pdfDefaultZoomInput.addEventListener('change', async () => {
+  let val = parseInt(pdfDefaultZoomInput.value, 10);
+  val = Math.round(val / 2) * 2;
+  val = Math.min(500, Math.max(25, val));
+  pdfDefaultZoomInput.value = val;
+  const level = val / 100;
+  await chrome.storage.sync.set({ [PDF_DEFAULT_ZOOM_KEY]: level });
+  showStatus('Zoom padrão para PDFs salvo!', 'success');
+});
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'sync' && changes[PDF_DEFAULT_ZOOM_KEY]) {
+    const newLevel = changes[PDF_DEFAULT_ZOOM_KEY].newValue ?? 1.0;
+    pdfDefaultZoomInput.value = Math.round(newLevel * 100);
+  }
+});
+
 // --- Supabase Config ---
 const syncWarningEl = document.getElementById('syncWarning');
 const sbUrlInput = document.getElementById('sbUrl');
@@ -266,8 +293,8 @@ async function loadSupabaseConfig() {
   const result = await sendMessage({ type: 'GET_SUPABASE_CONFIG' });
   if (result?.configured) {
     sbUrlInput.value = result.url || '';
-    sbKeyInput.value = '';
-    sbKeyInput.placeholder = result.maskedKey || '••••••••';
+    sbKeyInput.value = '••••••••••••';
+    sbKeyInput.placeholder = '';
     updateWarningVisibility(true);
   } else {
     sbUrlInput.value = '';
@@ -280,18 +307,24 @@ async function loadSupabaseConfig() {
 btnSaveConfig.addEventListener('click', async () => {
   const url = sbUrlInput.value.trim();
   const key = sbKeyInput.value.trim();
+  const isMasked = key === '••••••••••••';
 
-  if (!url || !key) {
-    showConfigStatus('Preencha URL e Key.', 'error');
+  if (!url) {
+    showConfigStatus('Preencha a URL.', 'error');
     return;
   }
   if (!url.startsWith('https://')) {
     showConfigStatus('URL deve começar com https://', 'error');
     return;
   }
+  if (!isMasked && !key) {
+    showConfigStatus('Preencha a Key ou deixe os ••••••••••••.', 'error');
+    return;
+  }
 
   btnSaveConfig.disabled = true;
-  const result = await sendMessage({ type: 'SAVE_SUPABASE_CONFIG', url, key });
+  const msgType = isMasked ? 'UPDATE_SUPABASE_URL' : 'SAVE_SUPABASE_CONFIG';
+  const result = await sendMessage({ type: msgType, url, key: isMasked ? undefined : key });
   btnSaveConfig.disabled = false;
 
   if (result?.success) {
@@ -444,4 +477,5 @@ function sendMessage(message) {
 loadDefaultZoom();
 loadPresets();
 loadSmartProfiles();
+loadPdfDefaultZoom();
 loadSupabaseConfig();

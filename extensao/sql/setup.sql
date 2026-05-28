@@ -49,6 +49,21 @@ CREATE TABLE IF NOT EXISTS public.smart_zoom_profiles (
 CREATE INDEX IF NOT EXISTS idx_smart_zoom_profiles_sort_order ON public.smart_zoom_profiles(sort_order ASC);
 
 -- ============================================================
+-- Tabela: pdf_zoom_profiles
+-- Presets de Zoom Adaptativo para PDFs (independentes dos presets HTML)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.pdf_zoom_profiles (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  label TEXT NOT NULL UNIQUE CHECK (char_length(label) <= 30),
+  zoom_level NUMERIC(4,2) NOT NULL CHECK (zoom_level >= 0.25 AND zoom_level <= 5.0),
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Índice para ordenação consistente
+CREATE INDEX IF NOT EXISTS idx_pdf_zoom_profiles_sort_order ON public.pdf_zoom_profiles(sort_order ASC);
+
+-- ============================================================
 -- RLS (Row Level Security)
 -- DESABILITADO pois estamos usando anon key sem user auth.
 -- Quando migrar para auth de usuário, habilite RLS e crie policies.
@@ -63,6 +78,7 @@ ALTER TABLE public.smart_zoom_profiles DISABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.zoom_settings TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.presets TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.smart_zoom_profiles TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pdf_zoom_profiles TO anon;
 
 -- ============================================================
 -- Comentários para documentação no Supabase Dashboard
@@ -81,3 +97,8 @@ COMMENT ON COLUMN public.smart_zoom_profiles.resolution_width IS 'Largura da tel
 COMMENT ON COLUMN public.smart_zoom_profiles.resolution_height IS 'Altura da tela em pixels (ex: 1080)';
 COMMENT ON COLUMN public.smart_zoom_profiles.zoom_level IS 'Nível de zoom entre 0.25 e 5.0 (0.74 = 74%)';
 COMMENT ON COLUMN public.smart_zoom_profiles.sort_order IS 'Ordem de prioridade na busca de perfil';
+
+COMMENT ON TABLE public.pdf_zoom_profiles IS 'Presets de Zoom Adaptativo para PDFs (independentes dos presets HTML)';
+COMMENT ON COLUMN public.pdf_zoom_profiles.label IS 'Nome do preset PDF (max 30 chars)';
+COMMENT ON COLUMN public.pdf_zoom_profiles.zoom_level IS 'Nível de zoom entre 0.25 e 5.0 (1.0 = 100%)';
+COMMENT ON COLUMN public.pdf_zoom_profiles.sort_order IS 'Ordem de exibição na seção PDF Zoom';

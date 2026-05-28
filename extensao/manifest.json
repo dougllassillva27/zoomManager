@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Native Zoom Manager",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "Gerenciamento de zoom nativo por domínio com Ctrl+Roda do Mouse",
   "permissions": [
     "storage",
@@ -10,7 +10,8 @@
     "alarms"
   ],
   "host_permissions": [
-    "https://dcndxjhlktxtyectrtzm.supabase.co/*"
+    "https://dcndxjhlktxtyectrtzm.supabase.co/*",
+    "file:///*"
   ],
   "background": {
     "service_worker": "background.js"

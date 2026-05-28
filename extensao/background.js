@@ -169,6 +169,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
       }
 
+      case 'GET_TAB_ID': {
+        return sender.tab?.id ?? null;
+      }
+
       case 'GET_CURRENT_ZOOM': {
         const { tabId } = message;
         if (tabId == null) return ZOOM_DEFAULT;
@@ -279,7 +283,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               sort_order: i,
               updated_at: new Date().toISOString()
             }));
-            const smartResult = await supabaseRequest('/rest/v1/smart_zoom_profiles', {
+            const smartResult = await supabaseRequest('/rest/v1/smart_zoom_profiles?on_conflict=resolution_width,resolution_height', {
               method: 'POST',
               headers: { 'Prefer': 'resolution=merge-duplicates' },
               body: JSON.stringify(smartEntries)
@@ -287,6 +291,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (smartResult.error) {
               console.error('[Supabase] SYNC_PUSH smart_zoom_profiles error:', smartResult.error);
               return { success: false, error: smartResult.error, timestamp: new Date().toISOString() };
+            }
+          }
+
+          // Push pdf_zoom_profiles + __pdfZoom/__pdfDefaultZoom as reserved labels
+          const pdfProfiles = allData['__pdfZoomProfiles'] ?? [];
+          const pdfEntries = pdfProfiles.map((p, i) => ({
+            label: p.label,
+            zoom_level: p.zoom_level,
+            sort_order: i,
+            updated_at: new Date().toISOString()
+          }));
+          if (allData['__pdfZoom'] != null) {
+            pdfEntries.push({ label: '__current__', zoom_level: allData['__pdfZoom'], sort_order: 9998, updated_at: new Date().toISOString() });
+          }
+          if (allData['__pdfDefaultZoom'] != null) {
+            pdfEntries.push({ label: '__default__', zoom_level: allData['__pdfDefaultZoom'], sort_order: 9999, updated_at: new Date().toISOString() });
+          }
+          if (pdfEntries.length > 0) {
+            const pdfResult = await supabaseRequest('/rest/v1/pdf_zoom_profiles?on_conflict=label', {
+              method: 'POST',
+              headers: { 'Prefer': 'resolution=merge-duplicates' },
+              body: JSON.stringify(pdfEntries)
+            });
+            if (pdfResult.error) {
+              console.error('[Supabase] SYNC_PUSH pdf_zoom_profiles error:', pdfResult.error);
+              return { success: false, error: pdfResult.error, timestamp: new Date().toISOString() };
             }
           }
 
@@ -359,14 +389,101 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return { applied: true, level: match.zoom_level };
       }
 
+      case 'GET_PDF_PROFILES': {
+        const result = await chrome.storage.sync.get('__pdfZoomProfiles');
+        return result['__pdfZoomProfiles'] ?? [];
+      }
+
+      case 'SAVE_PDF_PROFILES': {
+        const { profiles } = message;
+        if (!Array.isArray(profiles)) return false;
+        const validated = profiles.slice(0, 20).map((p, i) => ({
+          label: String(p.label || '').slice(0, 30),
+          zoom_level: clampZoom(p.zoom_level || 1.0),
+          sort_order: i
+        }));
+        await chrome.storage.sync.set({ '__pdfZoomProfiles': validated });
+        return validated;
+      }
+
+      case 'DELETE_PDF_PROFILE': {
+        const { index } = message;
+        if (typeof index !== 'number') return false;
+        const result = await chrome.storage.sync.get('__pdfZoomProfiles');
+        const profiles = result['__pdfZoomProfiles'] ?? [];
+        if (index < 0 || index >= profiles.length) return false;
+        profiles.splice(index, 1);
+        profiles.forEach((p, i) => { p.sort_order = i; });
+        await chrome.storage.sync.set({ '__pdfZoomProfiles': profiles });
+        return profiles;
+      }
+
+      case 'SAVE_PDF_ZOOM': {
+        const { level } = message;
+        if (level == null) return false;
+        const clamped = clampZoom(level);
+        await chrome.storage.sync.set({ '__pdfZoom': clamped });
+        return clamped;
+      }
+
+      case 'APPLY_PDF_ZOOM': {
+        const { tabId } = message;
+        const targetTabId = tabId ?? sender.tab?.id;
+        if (targetTabId == null) return { applied: false };
+
+        const pdfManual = await chrome.storage.sync.get('__pdfZoom');
+        if (pdfManual['__pdfZoom'] != null) {
+          const clamped = clampZoom(pdfManual['__pdfZoom']);
+          await chrome.tabs.setZoom(targetTabId, clamped);
+          return { applied: true, level: clamped };
+        }
+
+        const pdfDef = await chrome.storage.sync.get('__pdfDefaultZoom');
+        const pdfDefaultLevel = pdfDef['__pdfDefaultZoom'] ?? 1.0;
+        const clampedDefault = clampZoom(pdfDefaultLevel);
+        await chrome.tabs.setZoom(targetTabId, clampedDefault);
+        return { applied: true, level: clampedDefault };
+      }
+
+      case 'GET_PDF_ZOOM_LEVEL': {
+        const pdfManual = await chrome.storage.sync.get('__pdfZoom');
+        if (pdfManual['__pdfZoom'] != null) {
+          return clampZoom(pdfManual['__pdfZoom']);
+        }
+        const pdfDef = await chrome.storage.sync.get('__pdfDefaultZoom');
+        return clampZoom(pdfDef['__pdfDefaultZoom'] ?? 1.0);
+      }
+
+      case 'RESET_PDF_ZOOM': {
+        const { tabId } = message;
+        const targetTabId = tabId ?? sender.tab?.id;
+        if (targetTabId == null) return false;
+        await chrome.storage.sync.remove('__pdfZoom');
+        const pdfDef = await chrome.storage.sync.get('__pdfDefaultZoom');
+        const defaultLevel = clampZoom(pdfDef['__pdfDefaultZoom'] ?? 1.0);
+        await chrome.tabs.setZoom(targetTabId, defaultLevel);
+        return defaultLevel;
+      }
+
       case 'SAVE_SUPABASE_CONFIG': {
         const { url, key } = message;
         if (!url || !key || typeof url !== 'string' || typeof key !== 'string') {
           return { success: false, error: 'URL e Key são obrigatórios' };
         }
         await chrome.storage.local.set({
-          [SUPABASE_URL_KEY]: url.replace(/\/+$/, ''), // remove trailing slash
+          [SUPABASE_URL_KEY]: url.replace(/\/+$/, ''),
           [SUPABASE_KEY_KEY]: key.trim()
+        });
+        return { success: true };
+      }
+
+      case 'UPDATE_SUPABASE_URL': {
+        const { url } = message;
+        if (!url || typeof url !== 'string') {
+          return { success: false, error: 'URL é obrigatória' };
+        }
+        await chrome.storage.local.set({
+          [SUPABASE_URL_KEY]: url.replace(/\/+$/, '')
         });
         return { success: true };
       }
@@ -483,6 +600,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             }));
           }
 
+          // Pull pdf_zoom_profiles
+          const pdfResult = await supabaseRequest('/rest/v1/pdf_zoom_profiles?select=label,zoom_level,sort_order&order=sort_order.asc');
+          if (pdfResult.error) {
+            console.error('[Supabase] SYNC_PULL pdf_zoom_profiles error:', pdfResult.error);
+            return { success: false, error: pdfResult.error, timestamp: new Date().toISOString() };
+          }
+          if (pdfResult.data && pdfResult.data.length > 0) {
+            const profiles = [];
+            for (const p of pdfResult.data) {
+              if (p.label === '__current__') {
+                updates['__pdfZoom'] = Number(p.zoom_level);
+              } else if (p.label === '__default__') {
+                updates['__pdfDefaultZoom'] = Number(p.zoom_level);
+              } else {
+                profiles.push({ label: p.label, zoom_level: p.zoom_level, sort_order: p.sort_order });
+              }
+            }
+            updates['__pdfZoomProfiles'] = profiles;
+          }
+
           if (Object.keys(updates).length > 0) {
             await chrome.storage.sync.set(updates);
           }
@@ -579,7 +716,6 @@ chrome.runtime.onInstalled.addListener(async () => {
     }
     if (Object.keys(updates).length > 0) {
       await chrome.storage.sync.set(updates);
-      console.log('[Supabase] Initial pull completed on install');
     }
   } catch (err) {
     console.error('[Supabase] Initial pull failed:', err);
@@ -650,10 +786,26 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
         sort_order: i,
         updated_at: new Date().toISOString()
       }));
-      await supabaseRequest('/rest/v1/smart_zoom_profiles', {
+      await supabaseRequest('/rest/v1/smart_zoom_profiles?on_conflict=resolution_width,resolution_height', {
         method: 'POST',
         headers: { 'Prefer': 'resolution=merge-duplicates' },
         body: JSON.stringify(smartEntries)
+      });
+    }
+
+    // Auto-sync pdf_zoom_profiles
+    const pdfProfiles = allData['__pdfZoomProfiles'] ?? [];
+    if (pdfProfiles.length > 0) {
+      const pdfEntries = pdfProfiles.map((p, i) => ({
+        label: p.label,
+        zoom_level: p.zoom_level,
+        sort_order: i,
+        updated_at: new Date().toISOString()
+      }));
+      await supabaseRequest('/rest/v1/pdf_zoom_profiles?on_conflict=label', {
+        method: 'POST',
+        headers: { 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify(pdfEntries)
       });
     }
 
@@ -701,35 +853,125 @@ chrome.commands.onCommand.addListener(async (command) => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id || !tab.url) return;
 
+    // PDF: usa RESET_PDF_ZOOM
+    if (isPdfUrl(tab.url)) {
+      await chrome.storage.sync.remove('__pdfZoom');
+      const pdfDef = await chrome.storage.sync.get('__pdfDefaultZoom');
+      const defaultLevel = clampZoom(pdfDef['__pdfDefaultZoom'] ?? ZOOM_DEFAULT);
+      await chrome.tabs.setZoom(tab.id, defaultLevel);
+      return;
+    }
+
     const hostname = getZoomKey(tab.url);
     if (!hostname) return;
 
-    // Lê zoom padrão customizado
     const defResult = await chrome.storage.sync.get(DEFAULT_ZOOM_KEY);
     const defaultLevel = defResult[DEFAULT_ZOOM_KEY] ?? ZOOM_DEFAULT;
-    // Remove PRIMEIRO para evitar race condition com tabs.onUpdated
     await chrome.storage.sync.remove(hostname);
     await chrome.tabs.setZoom(tab.id, clampZoom(defaultLevel));
-
-    console.log(`[ZoomManager] Reset zoom for ${hostname} → ${clampZoom(defaultLevel)}`);
   } catch (err) {
     console.error('[ZoomManager] Reset command error:', err);
   }
 });
 
-// --- Restaurar zoom ao navegar ---
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
-  // Apenas quando a página termina de carregar e tem URL válida
-  if (changeInfo.status !== 'complete' || !tab.url) return;
+/**
+ * Função auxiliar para detecção de PDFs
+ * @param {string} url - URL da página
+ * @returns {boolean} true se for PDF
+ */
+function isPdfUrl(url) {
+  if (!url) return false;
+  
+  // Viewer nativo do Chrome
+  if (url.startsWith('chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai')) {
+    return true;
+  }
+  
+  // PDFs locais
+  if (url.startsWith('file://')) {
+    const cleanUrl = decodeURIComponent(url.split('?')[0].split('#')[0]).toLowerCase();
+    return cleanUrl.endsWith('.pdf');
+  }
+  
+  // URLs com extensão .pdf
+  const cleanUrl = decodeURIComponent(url.split('?')[0].split('#')[0]).toLowerCase();
+  return cleanUrl.endsWith('.pdf');
+}
 
-  const hostname = getZoomKey(tab.url);
-  if (!hostname) return;
+// --- Rastrear abas PDF que já tiveram zoom aplicado (evita loop) ---
+const pdfZoomApplied = new Set();
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  pdfZoomApplied.delete(tabId);
+});
+
+// --- Monitorar mudanças de zoom para detectar resets em PDFs ---
+chrome.tabs.onZoomChange.addListener(async (zoomChangeInfo) => {
+  const { tabId, newZoomFactor } = zoomChangeInfo;
+
+  if (!pdfZoomApplied.has(tabId)) return;
 
   try {
+    const tab = await chrome.tabs.get(tabId);
+    if (!isPdfUrl(tab.url)) {
+      pdfZoomApplied.delete(tabId);
+      return;
+    }
+
+    const pdfManual = await chrome.storage.sync.get('__pdfZoom');
+    let expectedLevel;
+    if (pdfManual['__pdfZoom'] != null) {
+      expectedLevel = clampZoom(pdfManual['__pdfZoom']);
+    } else {
+      const pdfDef = await chrome.storage.sync.get('__pdfDefaultZoom');
+      expectedLevel = clampZoom(pdfDef['__pdfDefaultZoom'] ?? 1.0);
+    }
+
+    // Viewer nativo reseta para 0.75 ou 1.0 dependendo do contexto.
+    // Só reaplica se o novo zoom for próximo desses valores padrão E diferente do esperado.
+    const nearDefault = Math.abs(newZoomFactor - 0.75) < 0.05 || Math.abs(newZoomFactor - 1.0) < 0.05;
+    if (nearDefault && Math.abs(newZoomFactor - expectedLevel) > 0.01) {
+      await chrome.tabs.setZoom(tabId, expectedLevel);
+    }
+  } catch {
+    pdfZoomApplied.delete(tabId);
+  }
+});
+
+// --- Restaurar zoom ao navegar ---
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (!changeInfo.status || !tab.url) return;
+  if (changeInfo.status !== 'complete' && changeInfo.status !== 'loading') return;
+
+  try {
+    const tabInfo = await chrome.tabs.get(tabId);
+    const isPdf = isPdfUrl(tabInfo.url);
+
+    if (isPdf) {
+      const pdfManual = await chrome.storage.sync.get('__pdfZoom');
+      let pdfLevel;
+      if (pdfManual['__pdfZoom'] != null) {
+        pdfLevel = clampZoom(pdfManual['__pdfZoom']);
+      } else {
+        const pdfDef = await chrome.storage.sync.get('__pdfDefaultZoom');
+        pdfLevel = clampZoom(pdfDef['__pdfDefaultZoom'] ?? 1.0);
+      }
+      await chrome.tabs.setZoom(tabId, pdfLevel);
+      pdfZoomApplied.add(tabId);
+      // Desativa guard após 2s para permitir ajuste livre via botões do toolbar
+      setTimeout(() => pdfZoomApplied.delete(tabId), 2000);
+      return;
+    }
+
+    // Lógica normal para páginas HTML
+    const hostname = getZoomKey(tab.url);
+    if (!hostname) return;
+
     const result = await chrome.storage.sync.get(hostname);
     const savedZoom = result[hostname];
 
     if (savedZoom != null && savedZoom !== ZOOM_DEFAULT) {
+      console.log(`[ZoomManager] tabs.onUpdated: RESTORING zoom ${savedZoom} for ${hostname}`);
       await chrome.tabs.setZoom(tabId, savedZoom);
     }
   } catch (err) {

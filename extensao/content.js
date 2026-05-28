@@ -51,21 +51,18 @@ function saveZoomDebounced(level) {
   }, 300);
 }
 
-// --- Interceptar Ctrl+Wheel ---
+// --- Interceptar Ctrl+Wheel (apenas páginas HTML; viewer PDF nativo consome eventos antes do content script) ---
 window.addEventListener(
   'wheel',
   (event) => {
-    if (!event.ctrlKey) return;
+    if (!event.ctrlKey || isPdf) return;
 
     event.preventDefault();
     event.stopPropagation();
 
-    // Direção: deltaY negativo = zoom in, positivo = zoom out
     const direction = event.deltaY < 0 ? 1 : -1;
     const baseZoom = currentZoom ?? 1.0;
     const newZoom = Math.round((baseZoom + direction * ZOOM_STEP) * 100) / 100;
-
-    // Clamp entre 0.25 e 5.0
     const clampedZoom = Math.min(5.0, Math.max(0.25, newZoom));
 
     if (clampedZoom !== baseZoom) {
@@ -76,8 +73,28 @@ window.addEventListener(
   { passive: false, capture: true }
 );
 
-// --- Restaurar zoom ao carregar ---
-(async function restoreZoom() {
+// --- Salvar zoom PDF com debounce ---
+function savePdfZoomDebounced(level) {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    sendMessage({ type: 'SAVE_PDF_ZOOM', level });
+  }, 300);
+}
+
+let currentTabId = null;
+
+// --- Aplicar zoom inicial (definida ANTES de detectPdf) ---
+async function applyInitialZoom() {
+  // Obtém tabId via background (content script em file:// não tem acesso a chrome.tabs)
+  currentTabId = await sendMessage({ type: 'GET_TAB_ID' });
+
+  if (isPdf) {
+    const savedLevel = await sendMessage({ type: 'GET_PDF_ZOOM_LEVEL' });
+    currentZoom = savedLevel ?? 1.0;
+    return;
+  }
+
+  // Modo HTML normal
   const hostname = window.location.hostname;
   if (!hostname) return;
 
@@ -101,4 +118,29 @@ window.addEventListener(
       currentZoom = 1.0;
     }
   }
-})();
+}
+
+// --- Detecção robusta de PDF com retry e fallback ---
+let isPdf = false;
+let pdfDetectionRetries = 0;
+const MAX_DETECTION_RETRIES = 10;
+const DETECTION_RETRY_DELAY = 50;
+
+function detectPdf() {
+  const cleanUrl = window.location.href.split('?')[0].split('#')[0].toLowerCase();
+  const byContentType = document.contentType === 'application/pdf';
+  const byUrl = cleanUrl.endsWith('.pdf') ||
+               window.location.href.startsWith('chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai') ||
+               (window.location.protocol === 'file:' && cleanUrl.includes('.pdf'));
+
+  isPdf = byContentType || byUrl;
+
+  if (!isPdf && pdfDetectionRetries < MAX_DETECTION_RETRIES) {
+    pdfDetectionRetries++;
+    setTimeout(detectPdf, DETECTION_RETRY_DELAY);
+  } else {
+    applyInitialZoom();
+  }
+}
+
+detectPdf();

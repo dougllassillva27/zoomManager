@@ -32,6 +32,7 @@ Opera inteiramente no contexto do navegador. O backend Supabase é opcional e co
 - Design system Dark Amoled OLED com CSS variables
 - Scrollbar e spinners estilizados via `color-scheme: dark`
 - Upsert seguro via on_conflict no Supabase REST API
+- Persistência de zoom em PDFs locais (file://) com reaplicação automática via onZoomChange
 
 ## Arquitetura
 
@@ -160,6 +161,9 @@ Detecta resolução do monitor via `screen.width/height` no Content Script. Busc
 
 ### Sincronização Supabase
 Cliente REST dinâmico lê credenciais do `chrome.storage.local` a cada chamada. Handlers `SYNC_PUSH` (POST com `?on_conflict` para upsert seguro) e `SYNC_PULL` (GET + merge) com tratamento de respostas 204 No Content. Dedup defensiva por Set antes do envio e após recebimento. Auto-sync via `chrome.alarms` a cada 60min. Sincroniza 3 tabelas: `zoom_settings`, `presets`, `smart_zoom_profiles`. Fallback gracioso: quando Supabase não está configurado ou offline, todas as operações continuam funcionando localmente.
+
+### Persistência de Zoom em PDFs Locais
+Zoom em PDFs abertos via `file://` é persistido globalmente em `__pdfZoom`. O background aplica o zoom via `tabs.onUpdated` (status `loading` ou `complete`). Como o viewer nativo do Chrome pode resetar o zoom momentaneamente após o carregamento, um listener `chrome.tabs.onZoomChange` detecta divergências e reaplica automaticamente o valor salvo. Um Set `pdfZoomApplied` rastreia abas já processadas para evitar loops infinitos de reaplicação.
 
 ### Export/Import
 Compressão gzip nativa via Compression Streams API. Export serializa todo o storage local para base64. Import descomprime, valida estrutura e restaura dados. Funciona independentemente do Supabase.

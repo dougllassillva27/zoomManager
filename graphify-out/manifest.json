@@ -1,19 +1,23 @@
 {
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\extensao\\background.js": {
-    "mtime": 1779825142.031345,
-    "hash": "fb21f99975a752fbd280d15b23452c21"
+    "mtime": 1779923039.224722,
+    "hash": "34d24f5b2a9c916b7ce4d0e5a5d736f8"
   },
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\extensao\\content.js": {
-    "mtime": 1779801852.0798912,
-    "hash": "5f1356a4fd0a763cdbee0c7879941cb1"
+    "mtime": 1779928608.013906,
+    "hash": "38c44a0d7687090d3edb4568ab3e9387"
   },
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\extensao\\options.js": {
-    "mtime": 1779809371.3918788,
-    "hash": "a95c1006645130a9f5042f89bcf85cc4"
+    "mtime": 1779904916.4094634,
+    "hash": "4548793bb93224fa434c14a6d2fbe318"
   },
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\extensao\\popup.js": {
     "mtime": 1779825424.459814,
     "hash": "5e4f7d9b515e90addc5632819c724830"
+  },
+  "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\extensao\\sql\\setup.sql": {
+    "mtime": 1779900622.9813864,
+    "hash": "e244e518659726e4172b10830bfaf95e"
   },
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\tests\\test_git_hooks.py": {
     "mtime": 1779729162.994639,
@@ -36,16 +40,16 @@
     "hash": "bc106fe15bb4e834fa4c3e45f2195433"
   },
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\README.md": {
-    "mtime": 1779826145.7627423,
-    "hash": "0995c69f52c76c7359edc55a82349aa3"
+    "mtime": 1779898549.616392,
+    "hash": "af7b369621a9e5f7210cb84c5c47d8ac"
   },
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\requirements.txt": {
     "mtime": 1779729109.8742208,
     "hash": "89f3ea12b290ef6bb7c33634db6d0c07"
   },
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\resumo-de-trabalho.md": {
-    "mtime": 1779826164.7656484,
-    "hash": "17c730bd245901a95b2b9742ceec5f6d"
+    "mtime": 1779935443.722825,
+    "hash": "f588d347c2c88e782bfb4a783f6198f7"
   },
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\docs\\GSD_FLOW.md": {
     "mtime": 1779729203.6548276,
@@ -56,16 +60,20 @@
     "hash": "1b762a900ec3060119ec451955ce0fdf"
   },
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\extensao\\options.html": {
-    "mtime": 1779809305.2976806,
-    "hash": "f1a3661aa1b2f741f13061d250cc48bb"
+    "mtime": 1779904661.0617468,
+    "hash": "93b90adf0bb008c67c1cb21c35a69008"
   },
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\extensao\\popup.html": {
     "mtime": 1779811421.1456397,
     "hash": "d5212d8775ad103b5e5c3d3230cdba7b"
   },
+  "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\_contexto-ia\\Commit.md": {
+    "mtime": 1779898903.4843197,
+    "hash": "f95b293f7e4b9b74b44471f4240d1cd1"
+  },
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\_contexto-ia\\Geral.md": {
-    "mtime": 1779801257.6109445,
-    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    "mtime": 1779969478.4956155,
+    "hash": "1502e7e61dd2659f1034e71ad22beb77"
   },
   "D:\\Onedrive - Douglas\\OneDrive\\Pessoal\\Dodo\\Programacao\\Git\\zoom\\extensao\\icons\\icon.png": {
     "mtime": 1779801483.4854066,

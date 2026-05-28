@@ -1,16 +1,16 @@
-# Graph Report - zoom  (2026-05-26)
+# Graph Report - zoom  (2026-05-28)
 
 ## Corpus Check
-- 6 files · ~7,763 words
+- 7 files · ~14,601 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 38 nodes · 44 edges · 6 communities (3 shown, 3 thin omitted)
+- 56 nodes · 78 edges · 9 communities (6 shown, 3 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `588f849b`
+- Built from commit: `8c1aa16e`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -21,35 +21,55 @@
 - [[_COMMUNITY_Community 3|Community 3]]
 - [[_COMMUNITY_Community 4|Community 4]]
 - [[_COMMUNITY_Community 5|Community 5]]
+- [[_COMMUNITY_Community 6|Community 6]]
+- [[_COMMUNITY_Community 7|Community 7]]
+- [[_COMMUNITY_Community 8|Community 8]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `showStatus()` - 4 edges
-2. `savePresets()` - 4 edges
-3. `renderPresets()` - 3 edges
-4. `addPreset()` - 3 edges
-5. `removePreset()` - 3 edges
-6. `sendMessage()` - 3 edges
-7. `clampZoom()` - 2 edges
-8. `handler()` - 2 edges
-9. `sendMessage()` - 2 edges
-10. `applyZoom()` - 2 edges
+1. `handler()` - 8 edges
+2. `showStatus()` - 5 edges
+3. `savePresets()` - 4 edges
+4. `deleteSmartProfile()` - 4 edges
+5. `sendMessage()` - 4 edges
+6. `getSupabaseConfig()` - 3 edges
+7. `supabaseRequest()` - 3 edges
+8. `sendMessage()` - 3 edges
+9. `applyInitialZoom()` - 3 edges
+10. `renderPresets()` - 3 edges
 
 ## Surprising Connections (you probably didn't know these)
-- None detected - all connections are within the same source files.
+- `deleteSmartProfile()` --calls--> `showStatus()`  [EXTRACTED]
+  extensao/options.js → extensao/options.js  _Bridges community 5 → community 7_
+- `savePresets()` --calls--> `renderPresets()`  [EXTRACTED]
+  extensao/options.js → extensao/options.js  _Bridges community 1 → community 5_
+- `loadSupabaseConfig()` --calls--> `sendMessage()`  [EXTRACTED]
+  extensao/options.js → extensao/options.js  _Bridges community 8 → community 7_
 
-## Communities (6 total, 3 thin omitted)
+## Communities (9 total, 3 thin omitted)
 
 ### Community 0 - "Community 0"
-Cohesion: 0.36
-Nodes (7): addPreset(), loadPresets(), removePreset(), renderPresets(), saveDefaultZoom(), savePresets(), showStatus()
+Cohesion: 0.38
+Nodes (8): buildContextMenu(), clampZoom(), compressToBase64(), decompressFromBase64(), getSupabaseConfig(), getZoomKey(), handler(), supabaseRequest()
 
-### Community 1 - "Community 1"
+### Community 2 - "Community 2"
+Cohesion: 0.43
+Nodes (4): applyInitialZoom(), applyZoom(), detectPdf(), sendMessage()
+
+### Community 3 - "Community 3"
 Cohesion: 0.38
 Nodes (3): applyAndSave(), loadAndRenderPresets(), sendMessage()
 
-### Community 2 - "Community 2"
+### Community 4 - "Community 4"
 Cohesion: 0.29
 Nodes (6): Garante que segredos reais sejam casados pelas regexes de segurança., Valida se caminhos protegidos e secretos são interceptados de forma correta., Valida se o formato Conventional Commit + ID de Observação é rigidamente exigido, test_commit_msg_validation(), test_pre_commit_protected_paths(), test_pre_commit_secret_detection()
+
+### Community 5 - "Community 5"
+Cohesion: 0.5
+Nodes (5): addPreset(), removePreset(), saveDefaultZoom(), savePresets(), showStatus()
+
+### Community 7 - "Community 7"
+Cohesion: 0.67
+Nodes (4): deleteSmartProfile(), loadSmartProfiles(), renderSmartProfiles(), sendMessage()
 
 ## Knowledge Gaps
 - **3 isolated node(s):** `Garante que segredos reais sejam casados pelas regexes de segurança.`, `Valida se caminhos protegidos e secretos são interceptados de forma correta.`, `Valida se o formato Conventional Commit + ID de Observação é rigidamente exigido`

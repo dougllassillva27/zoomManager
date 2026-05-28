@@ -11,6 +11,7 @@ const btnOptions = document.getElementById('btn-options');
 
 let currentHostname = '';
 let currentTabId = null;
+let isPdfTab = false;
 let isUpdating = false;
 
 /**
@@ -31,11 +32,22 @@ function sendMessage(message) {
 /**
  * Obtém aba ativa e extrai hostname.
  */
+function isPdfUrl(url) {
+  if (!url) return false;
+  if (url.startsWith('chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai')) return true;
+  if (url.startsWith('file://')) {
+    const clean = decodeURIComponent(url.split('?')[0].split('#')[0]).toLowerCase();
+    return clean.endsWith('.pdf');
+  }
+  const clean = decodeURIComponent(url.split('?')[0].split('#')[0]).toLowerCase();
+  return clean.endsWith('.pdf');
+}
+
 async function getActiveTabInfo() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.url) return null;
   try {
-    return { tabId: tab.id, hostname: new URL(tab.url).hostname };
+    return { tabId: tab.id, hostname: new URL(tab.url).hostname, isPdf: isPdfUrl(tab.url) };
   } catch {
     return null;
   }
@@ -62,18 +74,17 @@ function roundToStep2(val) {
  * Aplica zoom e salva no storage.
  */
 async function applyAndSave(zoomPercent) {
-  if (!currentHostname || !currentTabId) return;
+  if (!currentTabId) return;
   const level = zoomPercent / 100;
 
-  // Aplica zoom na aba ativa com tabId explícito
   await sendMessage({ type: 'APPLY_ZOOM', tabId: currentTabId, level });
 
-  // Salva no storage
-  await sendMessage({
-    type: 'SAVE_ZOOM',
-    hostname: currentHostname,
-    level,
-  });
+  if (isPdfTab) {
+    await sendMessage({ type: 'SAVE_PDF_ZOOM', level });
+  } else {
+    if (!currentHostname) return;
+    await sendMessage({ type: 'SAVE_ZOOM', hostname: currentHostname, level });
+  }
 }
 
 // --- Event Listeners ---
@@ -98,10 +109,15 @@ zoomNumber.addEventListener('change', () => {
 
 // Reset button
 resetBtn.addEventListener('click', async () => {
-  if (!currentHostname || !currentTabId) return;
-  const defaultLevel = await sendMessage({ type: 'RESET_ZOOM', hostname: currentHostname });
+  if (!currentTabId) return;
+  let defaultLevel;
+  if (isPdfTab) {
+    defaultLevel = await sendMessage({ type: 'RESET_PDF_ZOOM', tabId: currentTabId });
+  } else {
+    if (!currentHostname) return;
+    defaultLevel = await sendMessage({ type: 'RESET_ZOOM', hostname: currentHostname });
+  }
   const defaultPercent = Math.round((defaultLevel ?? 1.0) * 100);
-  await sendMessage({ type: 'APPLY_ZOOM', tabId: currentTabId, level: defaultLevel ?? 1.0 });
   updateUI(defaultPercent);
 });
 
@@ -141,16 +157,21 @@ async function loadAndRenderPresets() {
 
   currentHostname = tabInfo.hostname;
   currentTabId = tabInfo.tabId;
-  hostnameEl.textContent = currentHostname;
+  isPdfTab = tabInfo.isPdf;
+  hostnameEl.textContent = isPdfTab ? 'PDF Viewer' : currentHostname;
 
-  // Busca zoom salvo; se não existir, consulta zoom real da aba
-  const savedZoom = await sendMessage({ type: 'GET_ZOOM', hostname: currentHostname });
   let zoomPercent;
-  if (savedZoom != null && savedZoom !== 1.0) {
-    zoomPercent = Math.round(savedZoom * 100);
+  if (isPdfTab) {
+    const pdfLevel = await sendMessage({ type: 'GET_PDF_ZOOM_LEVEL' });
+    zoomPercent = Math.round((pdfLevel ?? 1.0) * 100);
   } else {
-    const currentZoom = await sendMessage({ type: 'GET_CURRENT_ZOOM', tabId: currentTabId });
-    zoomPercent = Math.round((currentZoom ?? 1.0) * 100);
+    const savedZoom = await sendMessage({ type: 'GET_ZOOM', hostname: currentHostname });
+    if (savedZoom != null && savedZoom !== 1.0) {
+      zoomPercent = Math.round(savedZoom * 100);
+    } else {
+      const currentZoom = await sendMessage({ type: 'GET_CURRENT_ZOOM', tabId: currentTabId });
+      zoomPercent = Math.round((currentZoom ?? 1.0) * 100);
+    }
   }
   updateUI(zoomPercent);
 
