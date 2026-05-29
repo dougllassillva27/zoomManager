@@ -10,6 +10,7 @@ const resetBtn = document.getElementById('resetBtn');
 const btnOptions = document.getElementById('btn-options');
 
 let currentHostname = '';
+let currentUrl = '';
 let currentTabId = null;
 let isPdfTab = false;
 let isUpdating = false;
@@ -47,7 +48,7 @@ async function getActiveTabInfo() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.url) return null;
   try {
-    return { tabId: tab.id, hostname: new URL(tab.url).hostname, isPdf: isPdfUrl(tab.url) };
+    return { tabId: tab.id, hostname: new URL(tab.url).hostname, url: tab.url, isPdf: isPdfUrl(tab.url) };
   } catch {
     return null;
   }
@@ -82,8 +83,8 @@ async function applyAndSave(zoomPercent) {
   if (isPdfTab) {
     await sendMessage({ type: 'SAVE_PDF_ZOOM', level });
   } else {
-    if (!currentHostname) return;
-    await sendMessage({ type: 'SAVE_ZOOM', hostname: currentHostname, level });
+    if (!currentUrl) return;
+    await sendMessage({ type: 'SAVE_ZOOM', url: currentUrl, level });
   }
 }
 
@@ -156,6 +157,7 @@ async function loadAndRenderPresets() {
   }
 
   currentHostname = tabInfo.hostname;
+  currentUrl = tabInfo.url || '';
   currentTabId = tabInfo.tabId;
   isPdfTab = tabInfo.isPdf;
   hostnameEl.textContent = isPdfTab ? 'PDF Viewer' : currentHostname;
@@ -165,7 +167,7 @@ async function loadAndRenderPresets() {
     const pdfLevel = await sendMessage({ type: 'GET_PDF_ZOOM_LEVEL' });
     zoomPercent = Math.round((pdfLevel ?? 1.0) * 100);
   } else {
-    const savedZoom = await sendMessage({ type: 'GET_ZOOM', hostname: currentHostname });
+    const savedZoom = await sendMessage({ type: 'GET_ZOOM', url: currentUrl });
     if (savedZoom != null && savedZoom !== 1.0) {
       zoomPercent = Math.round(savedZoom * 100);
     } else {
@@ -191,14 +193,14 @@ if (chrome.tabs?.onZoomChange) {
 
 // Escutar mudanças no storage (context menu aplica preset/reset sem onZoomChange)
 chrome.storage.onChanged.addListener(async (changes) => {
-  if (!currentHostname || !currentTabId) return;
-  // Se o hostname atual foi alterado no storage, atualiza UI
-  if (changes[currentHostname]) {
-    const newValue = changes[currentHostname].newValue;
-    if (newValue != null) {
-      updateUI(Math.round(newValue * 100));
+  if (!currentTabId) return;
+  // Se __urlRules mudou, reconsulta zoom para a URL atual
+  if (changes['__urlRules']) {
+    if (!currentUrl) return;
+    const savedZoom = await sendMessage({ type: 'GET_ZOOM', url: currentUrl });
+    if (savedZoom != null && savedZoom !== 1.0) {
+      updateUI(Math.round(savedZoom * 100));
     } else {
-      // Chave removida (reset): consulta zoom real da aba
       const currentZoom = await sendMessage({ type: 'GET_CURRENT_ZOOM', tabId: currentTabId });
       updateUI(Math.round((currentZoom ?? 1.0) * 100));
     }

@@ -84,6 +84,19 @@
 
     </div>
 
+    <!-- Regras URL Pattern: Full Width -->
+    <section class="setting" id="url-rules-section">
+      <label class="label">Regras de Zoom por URL</label>
+      <p class="description">Defina padrões glob para URLs específicas. Use * para segmentos e ** para caminhos profundos. Ex: youtube.com/watch/** = 115%</p>
+      <div class="input-row preset-add-row">
+        <input type="text" id="urlRulePattern" maxlength="200" placeholder="hostname.com/path/**" style="flex:1;">
+        <input type="number" id="urlRuleLevel" min="25" max="500" step="2" value="100" style="width:70px;">
+        <span class="unit">%</span>
+        <button id="addUrlRuleBtn" class="btn-add">+</button>
+      </div>
+      <ul id="url-rules-list" class="presets-list"></ul>
+    </section>
+
     <!-- Zoom Padrão PDF: Full Width -->
     <section class="setting" id="pdf-zoom-section">
       <label for="pdfDefaultZoom" class="label">Zoom Padrão para PDFs (%)</label>

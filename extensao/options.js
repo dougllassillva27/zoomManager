@@ -233,6 +233,98 @@ async function deleteSmartProfile(index) {
   }
 }
 
+// --- URL Rules CRUD ---
+const URL_RULES_KEY = '__urlRules';
+const urlRulePatternInput = document.getElementById('urlRulePattern');
+const urlRuleLevelInput = document.getElementById('urlRuleLevel');
+const addUrlRuleBtn = document.getElementById('addUrlRuleBtn');
+const urlRulesListEl = document.getElementById('url-rules-list');
+
+let currentUrlRules = [];
+
+async function loadUrlRules() {
+  const result = await chrome.storage.sync.get(URL_RULES_KEY);
+  currentUrlRules = result[URL_RULES_KEY] ?? [];
+  renderUrlRules();
+}
+
+function renderUrlRules() {
+  urlRulesListEl.innerHTML = '';
+  currentUrlRules.forEach((rule, index) => {
+    const li = document.createElement('li');
+    li.className = 'preset-item';
+    const zoomPercent = Math.round(rule.level * 100);
+    li.innerHTML = `
+      <div class="preset-info">
+        <span class="preset-label">${escapeHtml(rule.pattern)}</span>
+        <span class="preset-level">${zoomPercent}%</span>
+      </div>
+      <button class="btn-remove" data-index="${index}">Remover</button>
+    `;
+    urlRulesListEl.appendChild(li);
+  });
+
+  urlRulesListEl.querySelectorAll('.btn-remove').forEach(btn => {
+    btn.addEventListener('click', () => removeUrlRule(parseInt(btn.dataset.index)));
+  });
+}
+
+/**
+ * Calcula especificidade de um padrão glob.
+ * Conta segmentos literais (não-glob) separados por /.
+ */
+function calculateSpecificity(pattern) {
+  const segments = pattern.split('/');
+  let count = 0;
+  for (const seg of segments) {
+    if (seg && !seg.includes('*') && !seg.includes('?')) {
+      count++;
+    }
+  }
+  return count;
+}
+
+addUrlRuleBtn.addEventListener('click', async () => {
+  const pattern = urlRulePatternInput.value.trim();
+  let level = parseInt(urlRuleLevelInput.value, 10);
+
+  if (!pattern) {
+    showStatus('Padrão é obrigatório.', 'error');
+    return;
+  }
+  if (isNaN(level) || level < 25 || level > 500) {
+    showStatus('Zoom deve ser entre 25 e 500.', 'error');
+    return;
+  }
+
+  level = Math.round(level / 2) * 2;
+  const zoomLevel = level / 100;
+  const specificity = calculateSpecificity(pattern);
+
+  // Verifica duplicata por pattern
+  const existingIndex = currentUrlRules.findIndex(r => r.pattern === pattern);
+  if (existingIndex >= 0) {
+    // Atualiza existente
+    currentUrlRules[existingIndex].level = zoomLevel;
+    currentUrlRules[existingIndex].specificity = specificity;
+  } else {
+    currentUrlRules.push({ pattern, level: zoomLevel, specificity });
+  }
+
+  await chrome.storage.sync.set({ [URL_RULES_KEY]: currentUrlRules });
+  renderUrlRules();
+  showStatus('Regra salva!', 'success');
+  urlRulePatternInput.value = '';
+  urlRuleLevelInput.value = '100';
+});
+
+async function removeUrlRule(index) {
+  currentUrlRules.splice(index, 1);
+  await chrome.storage.sync.set({ [URL_RULES_KEY]: currentUrlRules });
+  renderUrlRules();
+  showStatus('Regra removida.', 'success');
+}
+
 // --- PDF Default Zoom ---
 const PDF_DEFAULT_ZOOM_KEY = '__pdfDefaultZoom';
 const pdfDefaultZoomInput = document.getElementById('pdfDefaultZoom');
@@ -477,5 +569,6 @@ function sendMessage(message) {
 loadDefaultZoom();
 loadPresets();
 loadSmartProfiles();
+loadUrlRules();
 loadPdfDefaultZoom();
 loadSupabaseConfig();

@@ -130,33 +130,248 @@ function clampZoom(level) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(level * 100) / 100));
 }
 
+// --- URL Pattern Matching (Glob-to-Regex) ---
+const URL_RULES_KEY = '__urlRules';
+
+/** Cache em memória das regras para evitar leitura assíncrona repetida */
+let urlRulesCache = null;
+
+/**
+ * Converte padrão glob para RegExp.
+ * Suporta: * (qualquer char exceto /), ** (qualquer char incluindo /), ? (um char).
+ * @param {string} pattern - Padrão glob (ex: "google.com/maps/**")
+ * @returns {RegExp}
+ */
+function globToRegex(pattern) {
+  let regexStr = '';
+  let i = 0;
+  while (i < pattern.length) {
+    const ch = pattern[i];
+    if (ch === '*') {
+      if (pattern[i + 1] === '*') {
+        regexStr += '.*';
+        i += 2;
+        // Pula / após ** se presente
+        if (pattern[i] === '/') i++;
+      } else {
+        regexStr += '[^/]*';
+        i++;
+      }
+    } else if (ch === '?') {
+      regexStr += '[^/]';
+      i++;
+    } else if ('.+^${}()|[]\\'.includes(ch)) {
+      regexStr += '\\' + ch;
+      i++;
+    } else {
+      regexStr += ch;
+      i++;
+    }
+  }
+  return new RegExp('^' + regexStr + '$');
+}
+
+/**
+ * Calcula especificidade de um padrão glob.
+ * Conta segmentos literais (não-glob) separados por /.
+ * @param {string} pattern
+ * @returns {number}
+ */
+function calculateSpecificity(pattern) {
+  const segments = pattern.split('/');
+  let count = 0;
+  for (const seg of segments) {
+    // Segmento é literal se não contém *, ?
+    if (seg && !seg.includes('*') && !seg.includes('?')) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/**
+ * Extrai hostname+pathname de uma URL para matching contra padrões.
+ * @param {string} url
+ * @returns {string} hostname+pathname ou string vazia
+ */
+function getUrlMatchTarget(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname + parsed.pathname;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Encontra a regra mais específica que casa com a URL.
+ * Usa cache em memória se disponível, senão lê do storage.
+ * @param {string} url - URL completa
+ * @param {Array<{pattern: string, level: number, specificity: number}>} [rules] - Regras opcionais (usa cache se omitido)
+ * @returns {{pattern: string, level: number, specificity: number}|null}
+ */
+function matchUrl(url, rules) {
+  const target = getUrlMatchTarget(url);
+  if (!target) return null;
+
+  const ruleSet = rules ?? urlRulesCache;
+  if (!ruleSet || ruleSet.length === 0) return null;
+
+  let bestMatch = null;
+  let bestSpecificity = -1;
+
+  for (const rule of ruleSet) {
+    if (rule.specificity < bestSpecificity) continue;
+    const re = globToRegex(rule.pattern);
+    if (re.test(target)) {
+      if (rule.specificity > bestSpecificity) {
+        bestMatch = rule;
+        bestSpecificity = rule.specificity;
+      }
+    }
+  }
+
+  return bestMatch;
+}
+
+/**
+ * Carrega regras URL do storage para o cache em memória.
+ * @returns {Promise<Array<{pattern: string, level: number, specificity: number}>>}
+ */
+async function loadUrlRules() {
+  const result = await chrome.storage.sync.get(URL_RULES_KEY);
+  urlRulesCache = result[URL_RULES_KEY] ?? [];
+  return urlRulesCache;
+}
+
+/** Chave flag para evitar reexecução da migração */
+const MIGRATED_V2_KEY = '__migratedV2';
+
+/**
+ * Migra dados legacy (chaves hostname → __urlRules) na primeira execução.
+ * Converte cada chave dinâmica "hostname": number em regra {pattern: "hostname/*", level, specificity: 1}.
+ * Remove chaves antigas após conversão. Executa apenas uma vez.
+ */
+async function migrateLegacyData() {
+  const flagResult = await chrome.storage.sync.get(MIGRATED_V2_KEY);
+  if (flagResult[MIGRATED_V2_KEY]) return;
+
+  const allData = await chrome.storage.sync.get(null);
+  const newRules = [];
+  const keysToRemove = [];
+
+  for (const [key, value] of Object.entries(allData)) {
+    if (!key.startsWith('__') && typeof value === 'number') {
+      newRules.push({
+        pattern: key + '/*',
+        level: value,
+        specificity: calculateSpecificity(key + '/*')
+      });
+      keysToRemove.push(key);
+    }
+  }
+
+  if (newRules.length > 0) {
+    // Mescla com regras existentes (caso já existam de um sync pull)
+    const existingResult = await chrome.storage.sync.get(URL_RULES_KEY);
+    const existingRules = existingResult[URL_RULES_KEY] ?? [];
+    const mergedRules = [...existingRules, ...newRules];
+
+    const updates = { [URL_RULES_KEY]: mergedRules, [MIGRATED_V2_KEY]: true };
+    await chrome.storage.sync.set(updates);
+    if (keysToRemove.length > 0) {
+      await chrome.storage.sync.remove(keysToRemove);
+    }
+    console.log(`[ZoomManager] Migrated ${newRules.length} legacy hostname rules to URL patterns`);
+  } else {
+    // Sem dados legacy, apenas marca flag
+    await chrome.storage.sync.set({ [MIGRATED_V2_KEY]: true });
+  }
+
+  // Recarrega cache após migração
+  await loadUrlRules();
+}
+
+// Executa migração no startup do service worker
+migrateLegacyData();
+
 // --- Message Passing ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handler = async () => {
     switch (message.type) {
       case 'GET_ZOOM': {
-        const key = message.hostname;
-        if (!key) return ZOOM_DEFAULT;
-        const result = await chrome.storage.sync.get(key);
-        return result[key] ?? ZOOM_DEFAULT;
+        // Tenta matching por URL pattern primeiro
+        const url = message.url || message.hostname;
+        if (!url) return ZOOM_DEFAULT;
+
+        // Garante que cache está carregado
+        if (!urlRulesCache) await loadUrlRules();
+
+        // Tenta match por padrão URL
+        const matched = matchUrl(url);
+        if (matched) return matched.level;
+
+        // Fallback: busca por hostname puro (retrocompatibilidade)
+        const hostname = getZoomKey(url);
+        if (!hostname) return ZOOM_DEFAULT;
+        const result = await chrome.storage.sync.get(hostname);
+        return result[hostname] ?? ZOOM_DEFAULT;
       }
 
       case 'SAVE_ZOOM': {
-        const { hostname, level } = message;
-        if (!hostname) return false;
+        const url = message.url || message.hostname;
+        const { level } = message;
+        if (!url) return false;
         const clamped = clampZoom(level);
-        await chrome.storage.sync.set({ [hostname]: clamped });
+
+        // Garante que cache está carregado
+        if (!urlRulesCache) await loadUrlRules();
+
+        // Extrai hostname+pathname para criar/atualizar regra
+        const target = getUrlMatchTarget(url);
+        if (!target) return false;
+
+        // Usa hostname/* como padrão padrão para saves via content script
+        const hostname = getZoomKey(url);
+        const pattern = hostname ? hostname + '/*' : target;
+        const specificity = calculateSpecificity(pattern);
+
+        // Atualiza ou adiciona regra no array
+        const existingIndex = urlRulesCache.findIndex(r => r.pattern === pattern);
+        if (existingIndex >= 0) {
+          urlRulesCache[existingIndex].level = clamped;
+        } else {
+          urlRulesCache.push({ pattern, level: clamped, specificity });
+        }
+
+        await chrome.storage.sync.set({ [URL_RULES_KEY]: urlRulesCache });
         return clamped;
       }
 
       case 'RESET_ZOOM': {
-        const { hostname } = message;
-        if (!hostname) return false;
+        const url = message.url || message.hostname;
+        if (!url) return false;
         // Lê zoom padrão customizado
         const defResult = await chrome.storage.sync.get(DEFAULT_ZOOM_KEY);
         const defaultLevel = defResult[DEFAULT_ZOOM_KEY] ?? ZOOM_DEFAULT;
-        // Remove zoom específico do domínio (volta ao default)
-        await chrome.storage.sync.remove(hostname);
+
+        // Garante que cache está carregado
+        if (!urlRulesCache) await loadUrlRules();
+
+        // Remove regra correspondente do __urlRules
+        const hostname = getZoomKey(url);
+        const pattern = hostname ? hostname + '/*' : getUrlMatchTarget(url);
+        const ruleIndex = urlRulesCache.findIndex(r => r.pattern === pattern);
+        if (ruleIndex >= 0) {
+          urlRulesCache.splice(ruleIndex, 1);
+          await chrome.storage.sync.set({ [URL_RULES_KEY]: urlRulesCache });
+        }
+
+        // Fallback: remove chave legacy se existir
+        if (hostname) {
+          await chrome.storage.sync.remove(hostname);
+        }
+
         return defaultLevel;
       }
 
@@ -217,33 +432,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         try {
           // Lê todos os dados locais
           const allData = await chrome.storage.sync.get(null);
-          const zoomSettings = {};
+          const urlRules = allData[URL_RULES_KEY] ?? [];
           const presets = allData['__zoomPresets'] ?? [];
-          const defaultZoom = allData['__defaultZoom'] ?? ZOOM_DEFAULT;
 
-          // Extrai apenas entradas de zoom (exclui chaves especiais)
-          for (const [key, value] of Object.entries(allData)) {
-            if (!key.startsWith('__') && typeof value === 'number') {
-              zoomSettings[key] = value;
-            }
-          }
-
-          // Push zoom_settings
-          const zoomEntries = Object.entries(zoomSettings).map(([hostname, zoom_level]) => ({
-            hostname,
-            zoom_level,
-            updated_at: new Date().toISOString()
-          }));
-
-          if (zoomEntries.length > 0) {
-            const zoomResult = await supabaseRequest('/rest/v1/zoom_settings?on_conflict=hostname', {
+          // Push __urlRules como unidade única (serializa array completo)
+          if (urlRules.length > 0) {
+            const rulesPayload = urlRules.map(r => ({
+              pattern: r.pattern,
+              zoom_level: r.level,
+              specificity: r.specificity,
+              updated_at: new Date().toISOString()
+            }));
+            const rulesResult = await supabaseRequest('/rest/v1/zoom_url_rules', {
               method: 'POST',
               headers: { 'Prefer': 'resolution=merge-duplicates' },
-              body: JSON.stringify(zoomEntries)
+              body: JSON.stringify(rulesPayload)
             });
-            if (zoomResult.error) {
-              console.error('[Supabase] SYNC_PUSH zoom_settings error:', zoomResult.error);
-              return { success: false, error: zoomResult.error, timestamp: new Date().toISOString() };
+            if (rulesResult.error) {
+              console.error('[Supabase] SYNC_PUSH zoom_url_rules error:', rulesResult.error);
+              return { success: false, error: rulesResult.error, timestamp: new Date().toISOString() };
             }
           }
 
@@ -620,6 +827,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             updates['__pdfZoomProfiles'] = profiles;
           }
 
+          // Pull zoom_url_rules
+          const rulesResult = await supabaseRequest('/rest/v1/zoom_url_rules?select=pattern,zoom_level,specificity');
+          if (rulesResult.error) {
+            console.error('[Supabase] SYNC_PULL zoom_url_rules error:', rulesResult.error);
+            return { success: false, error: rulesResult.error, timestamp: new Date().toISOString() };
+          }
+          if (rulesResult.data && rulesResult.data.length > 0) {
+            updates[URL_RULES_KEY] = rulesResult.data.map(r => ({
+              pattern: r.pattern,
+              level: Number(r.zoom_level),
+              specificity: Number(r.specificity)
+            }));
+          }
+
           if (Object.keys(updates).length > 0) {
             await chrome.storage.sync.set(updates);
           }
@@ -714,6 +935,20 @@ chrome.runtime.onInstalled.addListener(async () => {
           return true;
         });
     }
+    // Pull zoom_url_rules
+    try {
+      const rulesResult = await supabaseRequest('/rest/v1/zoom_url_rules?select=pattern,zoom_level,specificity');
+      if (!rulesResult.error && rulesResult.data && rulesResult.data.length > 0) {
+        updates[URL_RULES_KEY] = rulesResult.data.map(r => ({
+          pattern: r.pattern,
+          level: Number(r.zoom_level),
+          specificity: Number(r.specificity)
+        }));
+      }
+    } catch (e) {
+      console.error('[Supabase] Initial pull zoom_url_rules failed:', e);
+    }
+
     if (Object.keys(updates).length > 0) {
       await chrome.storage.sync.set(updates);
     }
@@ -732,26 +967,21 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
   try {
     const allData = await chrome.storage.sync.get(null);
-    const zoomSettings = {};
+    const urlRules = allData[URL_RULES_KEY] ?? [];
     const presets = allData['__zoomPresets'] ?? [];
 
-    for (const [key, value] of Object.entries(allData)) {
-      if (!key.startsWith('__') && typeof value === 'number') {
-        zoomSettings[key] = value;
-      }
-    }
-
-    const zoomEntries = Object.entries(zoomSettings).map(([hostname, zoom_level]) => ({
-      hostname,
-      zoom_level,
-      updated_at: new Date().toISOString()
-    }));
-
-    if (zoomEntries.length > 0) {
-      await supabaseRequest('/rest/v1/zoom_settings', {
+    // Push __urlRules como unidade única
+    if (urlRules.length > 0) {
+      const rulesPayload = urlRules.map(r => ({
+        pattern: r.pattern,
+        zoom_level: r.level,
+        specificity: r.specificity,
+        updated_at: new Date().toISOString()
+      }));
+      await supabaseRequest('/rest/v1/zoom_url_rules', {
         method: 'POST',
         headers: { 'Prefer': 'resolution=merge-duplicates' },
-        body: JSON.stringify(zoomEntries)
+        body: JSON.stringify(rulesPayload)
       });
     }
 
@@ -827,12 +1057,28 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'zoom-options') {
     chrome.runtime.openOptionsPage();
   } else if (info.menuItemId === 'zoom-reset') {
-    const hostname = getZoomKey(tab.url || '');
-    if (!hostname) return;
+    const url = tab.url || '';
+    if (!url) return;
     const defResult = await chrome.storage.sync.get(DEFAULT_ZOOM_KEY);
     const defaultLevel = defResult[DEFAULT_ZOOM_KEY] ?? ZOOM_DEFAULT;
-    // Remove PRIMEIRO para evitar race condition com tabs.onUpdated
-    await chrome.storage.sync.remove(hostname);
+
+    // Garante que cache está carregado
+    if (!urlRulesCache) await loadUrlRules();
+
+    // Remove regra correspondente do __urlRules
+    const hostname = getZoomKey(url);
+    const pattern = hostname ? hostname + '/*' : getUrlMatchTarget(url);
+    const ruleIndex = urlRulesCache.findIndex(r => r.pattern === pattern);
+    if (ruleIndex >= 0) {
+      urlRulesCache.splice(ruleIndex, 1);
+      await chrome.storage.sync.set({ [URL_RULES_KEY]: urlRulesCache });
+    }
+
+    // Fallback: remove chave legacy se existir
+    if (hostname) {
+      await chrome.storage.sync.remove(hostname);
+    }
+
     await chrome.tabs.setZoom(tab.id, clampZoom(defaultLevel));
   } else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('preset-')) {
     const index = parseInt(info.menuItemId.replace('preset-', ''), 10);
@@ -862,12 +1108,28 @@ chrome.commands.onCommand.addListener(async (command) => {
       return;
     }
 
-    const hostname = getZoomKey(tab.url);
-    if (!hostname) return;
-
+    const url = tab.url;
+    if (!url) return;
     const defResult = await chrome.storage.sync.get(DEFAULT_ZOOM_KEY);
     const defaultLevel = defResult[DEFAULT_ZOOM_KEY] ?? ZOOM_DEFAULT;
-    await chrome.storage.sync.remove(hostname);
+
+    // Garante que cache está carregado
+    if (!urlRulesCache) await loadUrlRules();
+
+    // Remove regra correspondente do __urlRules
+    const hostname = getZoomKey(url);
+    const pattern = hostname ? hostname + '/*' : getUrlMatchTarget(url);
+    const ruleIndex = urlRulesCache.findIndex(r => r.pattern === pattern);
+    if (ruleIndex >= 0) {
+      urlRulesCache.splice(ruleIndex, 1);
+      await chrome.storage.sync.set({ [URL_RULES_KEY]: urlRulesCache });
+    }
+
+    // Fallback: remove chave legacy se existir
+    if (hostname) {
+      await chrome.storage.sync.remove(hostname);
+    }
+
     await chrome.tabs.setZoom(tab.id, clampZoom(defaultLevel));
   } catch (err) {
     console.error('[ZoomManager] Reset command error:', err);
@@ -964,14 +1226,29 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     }
 
     // Lógica normal para páginas HTML
-    const hostname = getZoomKey(tab.url);
+    const url = tab.url;
+    if (!url) return;
+
+    // Garante que cache está carregado
+    if (!urlRulesCache) await loadUrlRules();
+
+    // Tenta match por URL pattern primeiro
+    const matched = matchUrl(url);
+    if (matched && matched.level !== ZOOM_DEFAULT) {
+      console.log(`[ZoomManager] tabs.onUpdated: RESTORING zoom ${matched.level} for pattern ${matched.pattern}`);
+      await chrome.tabs.setZoom(tabId, matched.level);
+      return;
+    }
+
+    // Fallback: busca por hostname puro (retrocompatibilidade)
+    const hostname = getZoomKey(url);
     if (!hostname) return;
 
     const result = await chrome.storage.sync.get(hostname);
     const savedZoom = result[hostname];
 
     if (savedZoom != null && savedZoom !== ZOOM_DEFAULT) {
-      console.log(`[ZoomManager] tabs.onUpdated: RESTORING zoom ${savedZoom} for ${hostname}`);
+      console.log(`[ZoomManager] tabs.onUpdated: RESTORING zoom ${savedZoom} for ${hostname} (legacy)`);
       await chrome.tabs.setZoom(tabId, savedZoom);
     }
   } catch (err) {

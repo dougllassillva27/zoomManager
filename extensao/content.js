@@ -45,7 +45,7 @@ function saveZoomDebounced(level) {
   saveTimeout = setTimeout(() => {
     sendMessage({
       type: 'SAVE_ZOOM',
-      hostname: window.location.hostname,
+      url: window.location.href,
       level,
     });
   }, 300);
@@ -95,10 +95,10 @@ async function applyInitialZoom() {
   }
 
   // Modo HTML normal
-  const hostname = window.location.hostname;
-  if (!hostname) return;
+  const url = window.location.href;
+  if (!url) return;
 
-  const savedZoom = await sendMessage({ type: 'GET_ZOOM', hostname });
+  const savedZoom = await sendMessage({ type: 'GET_ZOOM', url });
   if (savedZoom != null && savedZoom !== 1.0) {
     // Zoom manual salvo tem prioridade sobre Smart Zoom
     currentZoom = savedZoom;
