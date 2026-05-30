@@ -242,6 +242,15 @@ const urlRulesListEl = document.getElementById('url-rules-list');
 
 let currentUrlRules = [];
 
+// Toggle da lista de regras URL (minimizada por padrão)
+const urlRulesToggle = document.getElementById('urlRulesToggle');
+const urlRulesList = document.getElementById('url-rules-list');
+
+urlRulesToggle.addEventListener('click', () => {
+  urlRulesToggle.classList.toggle('collapsed');
+  urlRulesList.classList.toggle('expanded');
+});
+
 async function loadUrlRules() {
   const result = await chrome.storage.sync.get(URL_RULES_KEY);
   currentUrlRules = result[URL_RULES_KEY] ?? [];
@@ -254,9 +263,10 @@ function renderUrlRules() {
     const li = document.createElement('li');
     li.className = 'preset-item';
     const zoomPercent = Math.round(rule.level * 100);
+    const overrideLabel = rule.overrideSmartZoom ? ' <span style="color:var(--accent-primary);font-size:10px;">[Sobrepor Smart Zoom]</span>' : '';
     li.innerHTML = `
       <div class="preset-info">
-        <span class="preset-label">${escapeHtml(rule.pattern)}</span>
+        <span class="preset-label">${escapeHtml(rule.pattern)}${overrideLabel}</span>
         <span class="preset-level">${zoomPercent}%</span>
       </div>
       <button class="btn-remove" data-index="${index}">Remover</button>
@@ -284,9 +294,34 @@ function calculateSpecificity(pattern) {
   return count;
 }
 
+/**
+ * Normaliza padrão de URL colada da barra de endereços.
+ * Remove protocolo, query string, hash e trailing slash.
+ * Se o resultado for apenas hostname (sem /), adiciona /* automaticamente.
+ * Ex: "https://www.facebook.com/" → "www.facebook.com/*"
+ * Ex: "https://github.com/user/repo" → "github.com/user/repo"
+ */
+function normalizePattern(raw) {
+  let p = raw.trim();
+  // Remove protocolo
+  p = p.replace(/^https?:\/\//, '');
+  // Remove query string e hash
+  p = p.split('?')[0].split('#')[0];
+  // Remove trailing slash (mas preserva /** no final)
+  p = p.replace(/\/+$/, '') || p;
+  // Se não contém /, é apenas hostname → adiciona /* para casar com qualquer path
+  if (!p.includes('/')) {
+    p += '/*';
+  }
+  return p;
+}
+
+const urlRuleOverrideInput = document.getElementById('urlRuleOverride');
+
 addUrlRuleBtn.addEventListener('click', async () => {
-  const pattern = urlRulePatternInput.value.trim();
+  const pattern = normalizePattern(urlRulePatternInput.value);
   let level = parseInt(urlRuleLevelInput.value, 10);
+  const overrideSmartZoom = urlRuleOverrideInput.checked;
 
   if (!pattern) {
     showStatus('Padrão é obrigatório.', 'error');
@@ -307,15 +342,18 @@ addUrlRuleBtn.addEventListener('click', async () => {
     // Atualiza existente
     currentUrlRules[existingIndex].level = zoomLevel;
     currentUrlRules[existingIndex].specificity = specificity;
+    currentUrlRules[existingIndex].overrideSmartZoom = overrideSmartZoom;
   } else {
-    currentUrlRules.push({ pattern, level: zoomLevel, specificity });
+    currentUrlRules.push({ pattern, level: zoomLevel, specificity, overrideSmartZoom });
   }
 
+  console.log('[ZoomDebug] Salvando regra:', { pattern, level: zoomLevel, specificity, overrideSmartZoom });
   await chrome.storage.sync.set({ [URL_RULES_KEY]: currentUrlRules });
   renderUrlRules();
   showStatus('Regra salva!', 'success');
   urlRulePatternInput.value = '';
   urlRuleLevelInput.value = '100';
+  urlRuleOverrideInput.checked = false;
 });
 
 async function removeUrlRule(index) {
@@ -460,6 +498,19 @@ chrome.storage.onChanged.addListener((changes) => {
   if (changes['__supabaseUrl'] || changes['__supabaseKey']) {
     loadSupabaseConfig();
   }
+  // Recarrega seções da UI quando dados são alterados externamente (SYNC_PULL, outro navegador)
+  if (changes['__zoomPresets']) {
+    loadPresets();
+  }
+  if (changes['__smartZoomProfiles']) {
+    loadSmartProfiles();
+  }
+  if (changes['__urlRules']) {
+    loadUrlRules();
+  }
+  if (changes[DEFAULT_ZOOM_KEY]) {
+    loadDefaultZoom();
+  }
 });
 
 // --- Sync / Export / Import ---
@@ -565,10 +616,25 @@ function sendMessage(message) {
   });
 }
 
+// --- Debug Logs Toggle ---
+const DEBUG_LOGS_KEY = '__debugLogs';
+const debugLogsToggle = document.getElementById('debugLogsToggle');
+
+async function loadDebugLogs() {
+  const result = await chrome.storage.sync.get(DEBUG_LOGS_KEY);
+  debugLogsToggle.checked = result[DEBUG_LOGS_KEY] ?? false;
+}
+
+debugLogsToggle.addEventListener('change', async () => {
+  await chrome.storage.sync.set({ [DEBUG_LOGS_KEY]: debugLogsToggle.checked });
+  showStatus(debugLogsToggle.checked ? 'Logs ativados!' : 'Logs desativados.', 'success');
+});
+
 // Carregar ao iniciar
 loadDefaultZoom();
 loadPresets();
 loadSmartProfiles();
 loadUrlRules();
+loadDebugLogs();
 loadPdfDefaultZoom();
 loadSupabaseConfig();

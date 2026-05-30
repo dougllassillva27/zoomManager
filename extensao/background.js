@@ -8,6 +8,38 @@ const ZOOM_MAX = 5.0;
 const ZOOM_DEFAULT = 1.0;
 const DEFAULT_ZOOM_KEY = '__defaultZoom';
 
+// --- Debug Logs ---
+const DEBUG_LOGS_KEY = '__debugLogs';
+let debugLogsEnabled = false;
+
+/**
+ * Log condicional: só imprime quando o toggle de debug está ativo.
+ * @param {...any} args - Argumentos para console.log
+ */
+function debugLog(...args) {
+  if (debugLogsEnabled) {
+    console.log('[ZoomDebug]', ...args);
+  }
+}
+
+// Carrega estado do debug no startup
+chrome.storage.sync.get(DEBUG_LOGS_KEY).then(result => {
+  debugLogsEnabled = result[DEBUG_LOGS_KEY] ?? false;
+});
+
+// Escuta mudanças no storage para invalidar cache e atualizar estado
+chrome.storage.onChanged.addListener((changes) => {
+  if (changes[DEBUG_LOGS_KEY]) {
+    debugLogsEnabled = changes[DEBUG_LOGS_KEY].newValue ?? false;
+    console.log('[ZoomManager] Debug logs:', debugLogsEnabled ? 'ATIVADOS' : 'DESATIVADOS');
+  }
+  // Invalida cache de regras URL quando __urlRules é alterado externamente (Options Page, sync)
+  if (changes['__urlRules']) {
+    urlRulesCache = null;
+    debugLog('Cache de regras URL invalidado por mudança externa');
+  }
+});
+
 // --- Supabase Config (Dinâmica) ---
 const SUPABASE_URL_KEY = '__supabaseUrl';
 const SUPABASE_KEY_KEY = '__supabaseKey';
@@ -154,7 +186,13 @@ function globToRegex(pattern) {
         // Pula / após ** se presente
         if (pattern[i] === '/') i++;
       } else {
-        regexStr += '[^/]*';
+        // * sozinho: se precedido por /, torna o / opcional para casar com hostname sem path
+        if (regexStr.endsWith('/')) {
+          regexStr = regexStr.slice(0, -1);
+          regexStr += '(/[^/]*)?';
+        } else {
+          regexStr += '[^/]*';
+        }
         i++;
       }
     } else if (ch === '?') {
@@ -197,7 +235,9 @@ function calculateSpecificity(pattern) {
 function getUrlMatchTarget(url) {
   try {
     const parsed = new URL(url);
-    return parsed.hostname + parsed.pathname;
+    // Remove trailing slash para matching consistente
+    const pathname = parsed.pathname.replace(/\/+$/, '') || '';
+    return parsed.hostname + pathname;
   } catch {
     return '';
   }
@@ -212,11 +252,25 @@ function getUrlMatchTarget(url) {
  */
 function matchUrl(url, rules) {
   const target = getUrlMatchTarget(url);
+  debugLog('matchUrl:', { url, target });
   if (!target) return null;
 
   const ruleSet = rules ?? urlRulesCache;
+  debugLog('matchUrl: ruleSet size =', ruleSet?.length ?? 0);
   if (!ruleSet || ruleSet.length === 0) return null;
 
+  // Prioridade 1: Regras com overrideSmartZoom (independente de especificidade)
+  for (const rule of ruleSet) {
+    if (rule.overrideSmartZoom) {
+      const re = globToRegex(rule.pattern);
+      if (re.test(target)) {
+        debugLog('matchUrl: override match encontrado', rule.pattern);
+        return rule;
+      }
+    }
+  }
+
+  // Prioridade 2: Maior especificidade
   let bestMatch = null;
   let bestSpecificity = -1;
 
@@ -300,22 +354,45 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handler = async () => {
     switch (message.type) {
       case 'GET_ZOOM': {
-        // Tenta matching por URL pattern primeiro
+        // Ordem de prioridade: Regra URL com override > Smart Zoom > Regra URL específica > Zoom padrão
         const url = message.url || message.hostname;
+        debugLog('GET_ZOOM:', { url, width: message.width, height: message.height });
         if (!url) return ZOOM_DEFAULT;
 
         // Garante que cache está carregado
         if (!urlRulesCache) await loadUrlRules();
 
-        // Tenta match por padrão URL
-        const matched = matchUrl(url);
-        if (matched) return matched.level;
+        // 1. Tenta regra URL com overrideSmartZoom primeiro (prioridade máxima)
+        const matchedOverride = matchUrl(url);
+        debugLog('GET_ZOOM matchedOverride:', matchedOverride);
+        if (matchedOverride && matchedOverride.overrideSmartZoom) {
+          debugLog('GET_ZOOM: override ativo, retornando', matchedOverride.level);
+          return matchedOverride.level;
+        }
 
-        // Fallback: busca por hostname puro (retrocompatibilidade)
-        const hostname = getZoomKey(url);
-        if (!hostname) return ZOOM_DEFAULT;
-        const result = await chrome.storage.sync.get(hostname);
-        return result[hostname] ?? ZOOM_DEFAULT;
+        // 2. Tenta Smart Zoom (prioridade sobre regras URL normais)
+        if (message.width && message.height) {
+          const szResult = await chrome.storage.sync.get('__smartZoomProfiles');
+          let profiles = szResult['__smartZoomProfiles'] ?? [];
+          if (profiles.length === 0) {
+            profiles = [{ resolution_width: 1920, resolution_height: 1080, zoom_level: 0.74 }];
+          }
+          const smartMatch = profiles.find(p => p.resolution_width === message.width && p.resolution_height === message.height);
+          if (smartMatch) {
+            debugLog('GET_ZOOM: Smart Zoom match', smartMatch.zoom_level);
+            return smartMatch.zoom_level;
+          }
+        }
+
+        // 3. Tenta regra URL específica (specificity > 1, sem override)
+        if (matchedOverride && matchedOverride.specificity > 1) {
+          debugLog('GET_ZOOM: regra específica', matchedOverride.level);
+          return matchedOverride.level;
+        }
+
+        // 4. Fallback: zoom padrão
+        debugLog('GET_ZOOM: fallback ZOOM_DEFAULT');
+        return ZOOM_DEFAULT;
       }
 
       case 'SAVE_ZOOM': {
@@ -436,14 +513,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const presets = allData['__zoomPresets'] ?? [];
 
           // Push __urlRules como unidade única (serializa array completo)
-          if (urlRules.length > 0) {
-            const rulesPayload = urlRules.map(r => ({
+          // Filtra padrões internos (chrome-extension://, chrome://) que não devem ser sincronizados
+          const syncableRules = urlRules.filter(r => !r.pattern.startsWith('chrome-extension://') && !r.pattern.startsWith('chrome://'));
+          if (syncableRules.length > 0) {
+            const rulesPayload = syncableRules.map(r => ({
               pattern: r.pattern,
               zoom_level: r.level,
               specificity: r.specificity,
               updated_at: new Date().toISOString()
             }));
-            const rulesResult = await supabaseRequest('/rest/v1/zoom_url_rules', {
+            const rulesResult = await supabaseRequest('/rest/v1/zoom_url_rules?on_conflict=pattern', {
               method: 'POST',
               headers: { 'Prefer': 'resolution=merge-duplicates' },
               body: JSON.stringify(rulesPayload)
@@ -455,20 +534,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
 
           // Push presets (dedup por label+level antes do envio)
+          debugLog('SYNC_PUSH presets locais:', presets);
           if (presets.length > 0) {
             const seen = new Set();
             const uniquePresets = presets.filter(p => {
-              const key = `${p.label}|${p.level}`;
+              // Normaliza level para inteiro na chave de dedup (74.0 === 74)
+              const key = `${p.label}|${Math.round(Number(p.level))}`;
               if (seen.has(key)) return false;
               seen.add(key);
               return true;
             });
+            debugLog('SYNC_PUSH presets após dedup local:', uniquePresets);
             const presetEntries = uniquePresets.map((p, i) => ({
               label: p.label,
               level: p.level,
               sort_order: i,
               updated_at: new Date().toISOString()
             }));
+            debugLog('SYNC_PUSH presetEntries enviados:', presetEntries);
             const presetResult = await supabaseRequest('/rest/v1/presets?on_conflict=label,level', {
               method: 'POST',
               headers: { 'Prefer': 'resolution=merge-duplicates' },
@@ -478,6 +561,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               console.error('[Supabase] SYNC_PUSH presets error:', presetResult.error);
               return { success: false, error: presetResult.error, timestamp: new Date().toISOString() };
             }
+            debugLog('SYNC_PUSH presets resposta Supabase:', presetResult.data);
           }
 
           // Push smart_zoom_profiles
@@ -498,6 +582,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             if (smartResult.error) {
               console.error('[Supabase] SYNC_PUSH smart_zoom_profiles error:', smartResult.error);
               return { success: false, error: smartResult.error, timestamp: new Date().toISOString() };
+            }
+          }
+
+          // Push __defaultZoom como entry especial em zoom_settings
+          if (allData[DEFAULT_ZOOM_KEY] != null) {
+            const defaultEntry = [{ hostname: '__default__', zoom_level: allData[DEFAULT_ZOOM_KEY], updated_at: new Date().toISOString() }];
+            const defaultResult = await supabaseRequest('/rest/v1/zoom_settings?on_conflict=hostname', {
+              method: 'POST',
+              headers: { 'Prefer': 'resolution=merge-duplicates' },
+              body: JSON.stringify(defaultEntry)
+            });
+            if (defaultResult.error) {
+              console.error('[Supabase] SYNC_PUSH __defaultZoom error:', defaultResult.error);
             }
           }
 
@@ -771,25 +868,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             console.error('[Supabase] SYNC_PULL presets error:', presetResult.error);
             return { success: false, error: presetResult.error, timestamp: new Date().toISOString() };
           }
+          debugLog('SYNC_PULL presets brutos do Supabase:', presetResult.data);
 
           // Merge remoto para storage local
           const updates = {};
           if (zoomResult.data && zoomResult.data.length > 0) {
             for (const entry of zoomResult.data) {
-              updates[entry.hostname] = entry.zoom_level;
+              if (entry.hostname === '__default__') {
+                updates[DEFAULT_ZOOM_KEY] = Number(entry.zoom_level);
+              } else {
+                updates[entry.hostname] = entry.zoom_level;
+              }
             }
           }
 
           if (presetResult.data && presetResult.data.length > 0) {
             const seenPull = new Set();
             updates['__zoomPresets'] = presetResult.data
-              .map(p => ({ label: p.label, level: p.level }))
+              .map(p => ({ label: p.label, level: Number(p.level) }))
               .filter(p => {
-                const key = `${p.label}|${p.level}`;
+                // Normaliza level para inteiro na chave de dedup (74.0 === 74)
+                const key = `${p.label}|${Math.round(p.level)}`;
                 if (seenPull.has(key)) return false;
                 seenPull.add(key);
                 return true;
               });
+            debugLog('SYNC_PULL presets após dedup local:', updates['__zoomPresets']);
           }
 
           // Pull smart_zoom_profiles
@@ -1130,6 +1234,10 @@ chrome.commands.onCommand.addListener(async (command) => {
       await chrome.storage.sync.remove(hostname);
     }
 
+    // Após reset, tenta Smart Zoom antes de cair para o padrão
+    // Nota: não temos acesso direto à resolução da aba aqui,
+    // então aplicamos o defaultLevel e deixamos o content script
+    // reaplicar Smart Zoom no próximo ciclo se disponível
     await chrome.tabs.setZoom(tab.id, clampZoom(defaultLevel));
   } catch (err) {
     console.error('[ZoomManager] Reset command error:', err);
@@ -1226,31 +1334,35 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     }
 
     // Lógica normal para páginas HTML
+    // Ordem de prioridade: Regra URL com override > Smart Zoom > Regra URL específica > Zoom padrão
     const url = tab.url;
+    debugLog('tabs.onUpdated:', { tabId, url });
     if (!url) return;
 
     // Garante que cache está carregado
     if (!urlRulesCache) await loadUrlRules();
 
-    // Tenta match por URL pattern primeiro
-    const matched = matchUrl(url);
-    if (matched && matched.level !== ZOOM_DEFAULT) {
-      console.log(`[ZoomManager] tabs.onUpdated: RESTORING zoom ${matched.level} for pattern ${matched.pattern}`);
-      await chrome.tabs.setZoom(tabId, matched.level);
+    // 1. Tenta regra URL com overrideSmartZoom primeiro (prioridade máxima)
+    const matchedOverride = matchUrl(url);
+    debugLog('tabs.onUpdated matchedOverride:', matchedOverride);
+    if (matchedOverride && matchedOverride.overrideSmartZoom) {
+      debugLog('tabs.onUpdated: override ativo, aplicando', matchedOverride.level);
+      await chrome.tabs.setZoom(tabId, matchedOverride.level);
       return;
     }
 
-    // Fallback: busca por hostname puro (retrocompatibilidade)
-    const hostname = getZoomKey(url);
-    if (!hostname) return;
+    // 2. Smart Zoom é aplicado pelo content script; aqui apenas restauramos regras URL
 
-    const result = await chrome.storage.sync.get(hostname);
-    const savedZoom = result[hostname];
-
-    if (savedZoom != null && savedZoom !== ZOOM_DEFAULT) {
-      console.log(`[ZoomManager] tabs.onUpdated: RESTORING zoom ${savedZoom} for ${hostname} (legacy)`);
-      await chrome.tabs.setZoom(tabId, savedZoom);
+    // 3. Tenta regra URL específica (specificity > 1, sem override)
+    if (matchedOverride && matchedOverride.specificity > 1 && matchedOverride.level !== ZOOM_DEFAULT) {
+      debugLog('tabs.onUpdated: regra específica, aplicando', matchedOverride.level);
+      await chrome.tabs.setZoom(tabId, matchedOverride.level);
+      return;
     }
+
+    debugLog('tabs.onUpdated: nenhuma regra específica encontrada, deixando content script decidir');
+
+    // 4. Fallback: zoom padrão (não aplica nada, deixa o content script decidir)
   } catch (err) {
     // Ignora erros em páginas restritas (chrome://, edge://, etc.)
     if (!err.message?.includes('Cannot access')) {

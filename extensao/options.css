@@ -213,6 +213,36 @@ input[type="number"]:focus {
   gap: 8px;
 }
 
+/* Collapsible List for URL Rules */
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 8px 0;
+  margin-bottom: 8px;
+}
+
+.collapsible-header .toggle-icon {
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: transform var(--transition-fast);
+}
+
+.collapsible-header.collapsed .toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.presets-list.collapsible {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+
+.presets-list.collapsible.expanded {
+  max-height: 500px;
+}
+
 .preset-item {
   display: flex;
   align-items: center;
