@@ -150,6 +150,25 @@ input[type="number"]:focus {
   background: rgba(0, 255, 255, 0.05);
 }
 
+/* Estado desabilitado dos botões (site desativado) */
+.btn-reset:disabled,
+.preset-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn-reset:disabled:hover {
+  border-color: var(--border-subtle);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
+.preset-btn:disabled:hover {
+  border-color: var(--border-subtle);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
 /* Presets Grid */
 .presets-grid {
   display: grid;

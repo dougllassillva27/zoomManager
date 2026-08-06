@@ -7,6 +7,7 @@ const zoomRange = document.getElementById('zoomRange');
 const zoomNumber = document.getElementById('zoomNumber');
 const hostnameEl = document.getElementById('hostname');
 const resetBtn = document.getElementById('resetBtn');
+const disableBtn = document.getElementById('disableBtn');
 const btnOptions = document.getElementById('btn-options');
 
 let currentHostname = '';
@@ -14,6 +15,7 @@ let currentUrl = '';
 let currentTabId = null;
 let isPdfTab = false;
 let isUpdating = false;
+let siteDisabled = false;
 
 /**
  * Envia mensagem ao background e retorna promessa.
@@ -122,6 +124,38 @@ resetBtn.addEventListener('click', async () => {
   updateUI(defaultPercent);
 });
 
+// --- Desativar neste site (estado de sessão) ---
+
+/**
+ * Sincroniza UI com o estado de desativação do site atual.
+ */
+function updateDisableUI() {
+  disableBtn.textContent = siteDisabled ? 'Ativar neste site' : 'Desativar neste site';
+  zoomRange.disabled = siteDisabled;
+  zoomNumber.disabled = siteDisabled;
+  resetBtn.disabled = siteDisabled;
+  document.getElementById('presets-grid')
+    .querySelectorAll('.preset-btn')
+    .forEach((btn) => { btn.disabled = siteDisabled; });
+}
+
+disableBtn.addEventListener('click', async () => {
+  if (!currentUrl) return;
+  const next = !siteDisabled;
+  const ok = await sendMessage({
+    type: 'TOGGLE_SITE_DISABLED',
+    url: currentUrl,
+    disable: next,
+    tabId: currentTabId
+  });
+  if (ok !== true) return;
+  siteDisabled = next;
+  updateDisableUI();
+  // Reflete o zoom real da aba após reset/reativação
+  const currentZoom = await sendMessage({ type: 'GET_CURRENT_ZOOM', tabId: currentTabId });
+  updateUI(Math.round((currentZoom ?? 1.0) * 100));
+});
+
 // --- Presets ---
 const presetsGrid = document.getElementById('presets-grid');
 
@@ -153,6 +187,7 @@ async function loadAndRenderPresets() {
     zoomRange.disabled = true;
     zoomNumber.disabled = true;
     resetBtn.disabled = true;
+    disableBtn.disabled = true;
     return;
   }
 
@@ -179,6 +214,14 @@ async function loadAndRenderPresets() {
 
   // Carrega presets
   await loadAndRenderPresets();
+
+  // Estado de desativação do site (oculto em abas PDF)
+  if (!isPdfTab && currentUrl) {
+    siteDisabled = (await sendMessage({ type: 'IS_SITE_DISABLED', url: currentUrl })) === true;
+    updateDisableUI();
+  } else {
+    disableBtn.style.display = 'none';
+  }
 })();
 
 // Escutar mudanças externas de zoom (atalhos, context menu)

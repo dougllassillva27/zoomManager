@@ -7,6 +7,8 @@
 const ZOOM_STEP = 0.02;
 let currentZoom = null;
 let saveTimeout = null;
+// Site desativado: extensão fica passiva (não intercepta nem aplica zoom)
+let siteDisabled = false;
 
 /**
  * Envia mensagem ao background e retorna promessa.
@@ -55,7 +57,7 @@ function saveZoomDebounced(level) {
 window.addEventListener(
   'wheel',
   (event) => {
-    if (!event.ctrlKey || isPdf) return;
+    if (!event.ctrlKey || isPdf || siteDisabled) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -85,8 +87,13 @@ let currentTabId = null;
 
 // --- Aplicar zoom inicial (definida ANTES de detectPdf) ---
 async function applyInitialZoom() {
-  // Obtém tabId via background (content script em file:// não tem acesso a chrome.tabs)
-  currentTabId = await sendMessage({ type: 'GET_TAB_ID' });
+  // Registra aba no domínio (controle de expiração) e obtém tabId via background
+  // (content script em file:// não tem acesso a chrome.tabs)
+  currentTabId = await sendMessage({ type: 'REGISTER_TAB', url: window.location.href });
+
+  // Site desativado: não aplica zoom salvo nem Smart Zoom
+  siteDisabled = (await sendMessage({ type: 'IS_SITE_DISABLED', url: window.location.href })) === true;
+  if (siteDisabled) return;
 
   if (isPdf) {
     const savedLevel = await sendMessage({ type: 'GET_PDF_ZOOM_LEVEL' });
@@ -142,5 +149,11 @@ function detectPdf() {
     applyInitialZoom();
   }
 }
+
+// Atualiza flag local quando a desativação do site muda (popup/outra aba)
+chrome.storage.onChanged.addListener(async (changes, areaName) => {
+  if (areaName !== 'session' || !changes['__disabledSites']) return;
+  siteDisabled = (await sendMessage({ type: 'IS_SITE_DISABLED', url: window.location.href })) === true;
+});
 
 detectPdf();

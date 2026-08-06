@@ -3,6 +3,9 @@
  * Gerencia persistência de zoom por hostname e comandos de teclado.
  */
 
+// Desativação por site (estado de sessão): getRootDomain, isSiteDisabled, etc.
+importScripts('disabledSites.js');
+
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 5.0;
 const ZOOM_DEFAULT = 1.0;
@@ -399,6 +402,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const url = message.url || message.hostname;
         const { level } = message;
         if (!url) return false;
+        // Site desativado: não grava regras
+        if (await isSiteDisabled(url)) return false;
         const clamped = clampZoom(level);
 
         // Garante que cache está carregado
@@ -457,12 +462,41 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const { tabId, level } = message;
         const targetTabId = tabId ?? sender.tab?.id;
         if (targetTabId == null) return false;
+        // Site desativado: extension fica passiva
+        if (await isTabDisabled(targetTabId, sender.tab?.url)) return false;
         await chrome.tabs.setZoom(targetTabId, clampZoom(level));
         return true;
       }
 
       case 'GET_TAB_ID': {
         return sender.tab?.id ?? null;
+      }
+
+      case 'REGISTER_TAB': {
+        // Content script registra a aba no domínio (controle de expiração da desativação)
+        const regTabId = sender.tab?.id;
+        if (regTabId == null) return null;
+        await registerTabDomain(regTabId, message.url || '');
+        return regTabId;
+      }
+
+      case 'IS_SITE_DISABLED': {
+        return await isSiteDisabled(message.url || '');
+      }
+
+      case 'TOGGLE_SITE_DISABLED': {
+        const key = getDisableKey(message.url || '');
+        if (!key) return false;
+        await setSiteDisabled(key, !!message.disable);
+        // Ao desativar: reseta zoom da aba para 100% imediatamente
+        if (message.disable && message.tabId != null) {
+          try {
+            await chrome.tabs.setZoom(message.tabId, ZOOM_DEFAULT);
+          } catch {
+            // Aba restrita ou fechada: ignora
+          }
+        }
+        return true;
       }
 
       case 'GET_CURRENT_ZOOM': {
@@ -496,6 +530,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const { level: presetLevel, tabId: presetTabId } = message;
         const targetId = presetTabId ?? sender.tab?.id;
         if (targetId == null || presetLevel == null) return false;
+        // Site desativado: preset ignorado
+        if (await isTabDisabled(targetId, sender.tab?.url)) return false;
         const clamped = clampZoom(presetLevel / 100);
         await chrome.tabs.setZoom(targetId, clamped);
         return true;
@@ -672,6 +708,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const { width, height, tabId } = message;
         const targetTabId = tabId ?? sender.tab?.id;
         if (targetTabId == null || !width || !height) return { applied: false };
+        // Site desativado: Smart Zoom ignorado
+        if (await isTabDisabled(targetTabId, sender.tab?.url)) return { applied: false };
         // Busca perfis
         const szResult = await chrome.storage.sync.get('__smartZoomProfiles');
         let profiles = szResult['__smartZoomProfiles'] ?? [];
@@ -1185,6 +1223,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
     await chrome.tabs.setZoom(tab.id, clampZoom(defaultLevel));
   } else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('preset-')) {
+    // Site desativado: presets do menu de contexto ignorados
+    if (await isSiteDisabled(tab.url || '')) return;
     const index = parseInt(info.menuItemId.replace('preset-', ''), 10);
     const result = await chrome.storage.sync.get('__zoomPresets');
     const presets = result['__zoomPresets'] ?? [];
@@ -1245,6 +1285,23 @@ chrome.commands.onCommand.addListener(async (command) => {
 });
 
 /**
+ * Verifica se a aba pertence a um site desativado.
+ * Usa a URL do sender quando disponível; senão consulta a aba.
+ * @param {number} tabId
+ * @param {string} [senderUrl]
+ * @returns {Promise<boolean>}
+ */
+async function isTabDisabled(tabId, senderUrl) {
+  if (senderUrl) return isSiteDisabled(senderUrl);
+  try {
+    const tab = await chrome.tabs.get(tabId);
+    return await isSiteDisabled(tab.url || '');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Função auxiliar para detecção de PDFs
  * @param {string} url - URL da página
  * @returns {boolean} true se for PDF
@@ -1271,8 +1328,10 @@ function isPdfUrl(url) {
 // --- Rastrear abas PDF que já tiveram zoom aplicado (evita loop) ---
 const pdfZoomApplied = new Set();
 
-chrome.tabs.onRemoved.addListener((tabId) => {
+chrome.tabs.onRemoved.addListener(async (tabId) => {
   pdfZoomApplied.delete(tabId);
+  // Sem abas restantes no domínio, a desativação expira
+  await unregisterTab(tabId);
 });
 
 // --- Monitorar mudanças de zoom para detectar resets em PDFs ---
@@ -1315,6 +1374,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
 
   try {
     const tabInfo = await chrome.tabs.get(tabId);
+
+    // Site desativado: não restaura zoom (nem em PDFs do domínio)
+    if (await isSiteDisabled(tabInfo.url || '')) return;
+
     const isPdf = isPdfUrl(tabInfo.url);
 
     if (isPdf) {
