@@ -95,13 +95,16 @@ extensao/
 Declaração Manifest V3 com permissões `storage`, `activeTab`, `contextMenus`, `alarms` e `host_permissions` para Supabase. Content scripts para `<all_urls>`, service worker, popup, options page e comandos de teclado (`Ctrl+Shift+Z` para popup, `Alt+Shift+R` para reset).
 
 ### `background.js`
-Service Worker responsável por toda a lógica de persistência, sincronização e aplicação de zoom. Expõe handlers via `chrome.runtime.onMessage`: `GET_ZOOM`, `SAVE_ZOOM`, `RESET_ZOOM`, `APPLY_ZOOM`, `GET_PRESETS`, `SAVE_PRESETS`, `APPLY_PRESET`, `GET_SMART_PROFILES`, `SAVE_SMART_PROFILES`, `DELETE_SMART_PROFILE`, `APPLY_SMART_ZOOM`, `SYNC_PUSH`, `SYNC_PULL`, `EXPORT_DATA`, `IMPORT_DATA`, `SAVE_SUPABASE_CONFIG`, `GET_SUPABASE_CONFIG`, `CLEAR_SUPABASE_CONFIG`, `TEST_SUPABASE`. Inclui cliente Supabase dinâmico com upsert via `on_conflict`, auto-sync via `chrome.alarms` a cada 60min, e menu de contexto com presets e reset.
+Service Worker responsável por toda a lógica de persistência, sincronização e aplicação de zoom. Expõe handlers via `chrome.runtime.onMessage`: `GET_ZOOM`, `SAVE_ZOOM`, `APPLY_ONLY`, `DELETE_URL_RULE`, `RESET_ZOOM`, `APPLY_ZOOM`, `GET_PRESETS`, `SAVE_PRESETS`, `APPLY_PRESET`, `GET_SMART_PROFILES`, `SAVE_SMART_PROFILES`, `DELETE_SMART_PROFILE`, `APPLY_SMART_ZOOM`, `SYNC_PUSH`, `SYNC_PULL`, `EXPORT_DATA`, `IMPORT_DATA`, `SAVE_SUPABASE_CONFIG`, `GET_SUPABASE_CONFIG`, `CLEAR_SUPABASE_CONFIG`, `TEST_SUPABASE`. Importa `urlRules.js` (matching glob) e `disabledSites.js` (desativação por sessão) via `importScripts`. Inclui cliente Supabase dinâmico com upsert via `on_conflict`, auto-sync via `chrome.alarms` a cada 60min, e menu de contexto com presets e reset.
+
+### `urlRules.js`
+Matching puro de regras URL, compartilhado entre o background (aplicação) e a Options Page (normalização do campo). Sem dependência de APIs do Chrome, coberto por testes em Node: `globToRegex`, `calculateSpecificity`, `getUrlMatchTarget`, `matchUrl`, `normalizePattern`. Semântica: `*` no fim cobre o site inteiro (`host/*` casa paths profundos), `*` no meio vale um segmento, `**` casa qualquer coisa.
 
 ### `content.js`
 Content Script injetado em todas as páginas. Intercepta eventos `wheel` com `ctrlKey: true` usando `{ passive: false, capture: true }` para prevenir o comportamento nativo do Chrome. Calcula delta com step de 0.02, aplica clamp entre 0.25 e 5.0, e envia mensagens ao background. Restaura zoom salvo ao carregar via `requestAnimationFrame`.
 
 ### `popup.html/css/js`
-Interface de ajuste fino com slider (range 26–500%, step 2), input numérico sincronizado, grid de presets em 2 colunas e botão reset. Usa `tabId` explícito obtido via `chrome.tabs.query` para aplicar zoom instantaneamente sem necessidade de recarregar a página. Design system Dark Amoled com CSS variables.
+Interface de ajuste fino com slider (range 26 a 500%, step 2), input numérico sincronizado, grid de presets em 2 colunas e botão reset. Usa `tabId` explícito obtido via `chrome.tabs.query` para aplicar zoom instantaneamente sem necessidade de recarregar a página. Design system Dark Amoled com CSS variables.
 
 ### `options.html/css/js`
 Página de configurações com layout grid 4 colunas responsivo (colapsa para 2 em ≤1000px, 1 em ≤600px). Coluna 1: Zoom Padrão para reset (`__defaultZoom`). Coluna 2: CRUD de Presets (`__zoomPresets`, max 8). Coluna 3: Smart Zoom Automático com botão Detectar resolução (`screen.width/height`) e perfis por resolução exata. Coluna 4: Configuração Supabase (URL + Anon Key com teste de conexão). Seção full-width: Sincronização & Backup (Sync Push/Pull, Export/Import com compressão gzip + base64). Banner de aviso visível quando Supabase não está configurado.
@@ -113,9 +116,9 @@ Página de configurações com layout grid 4 colunas responsivo (colapsa para 2 
 2. Content Script é injetado em todas as abas HTTP/HTTPS
 3. Ao carregar página, content script consulta zoom salvo via GET_ZOOM
 4. Se zoom salvo existir, aplica via APPLY_ZOOM com debounce
-5. Ctrl+Roda interceptado → calcula novo nível → aplica e salva
+5. Ctrl+Roda interceptado → calcula novo nível → APPLY_ONLY (aplica na aba, não grava regra)
 6. Popup aberto → busca zoom atual → exibe slider/input/presets
-7. Ajuste via popup → APPLY_ZOOM com tabId explícito → SAVE_ZOOM
+7. Ajuste via popup → APPLY_ONLY com tabId explícito (aplica na aba, não grava regra)
 8. Reset (Alt+Shift+R ou botão) → lê __defaultZoom → aplica e remove chave do domínio
 9. Presets definidos em Options → aparecem como botões no popup → aplicação instantânea
 10. Smart Zoom detecta resolução (screen.width/height) → aplica zoom se domínio sem zoom manual
@@ -129,11 +132,24 @@ Página de configurações com layout grid 4 colunas responsivo (colapsa para 2 
 
 - **`chrome.storage.sync`**: Armazenamento local primário sincronizado entre dispositivos logados na mesma conta Google.
 - **`chrome.storage.local`**: Credenciais Supabase (`__supabaseUrl`, `__supabaseKey`) armazenadas localmente (não sincronizadas).
-- **Chave por domínio**: `{hostname}: number` — nível de zoom salvo (ex: `"github.com": 1.2`)
+- **`__urlRules`**: Array de regras `{ pattern, level, specificity, overrideSmartZoom? }`. É a **única** fonte de regras, e só a Options Page escreve nela (curadoria manual). Ajuste de zoom no dia a dia não cria regra.
+- **Zoom por site**: não é persistido pela extensão. O Chrome guarda zoom nativo por host (`per_host_zoom_levels`), então Ctrl+roda e slider sobrevivem ao reload sem gravar nada.
 - **`__defaultZoom`**: Nível de zoom padrão para reset (fallback: 1.0)
 - **`__zoomPresets`**: Array de objetos `{ label: string, level: number }` (max 8)
 - **`__smartZoomProfiles`**: Array de objetos `{ resolution_width, resolution_height, zoom_level }` (match exato por resolução)
 - **Supabase (opcional)**: Tabelas `zoom_settings`, `presets` e `smart_zoom_profiles` via REST API com upsert (`on_conflict`). Fallback automático para storage local quando não configurado.
+
+### Ordem de prioridade do zoom
+
+1. Regra `__urlRules` com `overrideSmartZoom` (vence tudo)
+2. Smart Zoom por resolução
+3. Qualquer regra `__urlRules` que case com a URL
+4. Zoom já persistido pelo Chrome para o host (ajuste manual)
+5. `__defaultZoom`
+
+### Quota do `storage.sync`
+
+Limite de 8.192 bytes por item e 512 itens no total. `__urlRules` é um item único com o array inteiro: cabe em torno de 110 regras. `saveUrlRules()` mede o payload antes de gravar e recusa com erro no console em vez de perder a gravação silenciosamente. Chaves `"hostname": number` do modelo v1 são removidas na inicialização (`removeLegacyHostKeys`), porque cada uma consumia um dos 512 itens.
 
 ## Segurança e Privacidade
 
@@ -201,14 +217,24 @@ Não há build, bundler ou processo de compilação. Os arquivos são carregados
 
 ## Testes
 
-No estado atual, o projeto não possui testes automatizados para a extensão Chrome.
+Testes automatizados em `extensao/tests/` (Node 18+, sem dependências):
+
+```bash
+node --test extensao/tests/*.test.js      # 25 testes: urlRules + disabledSites + fluxo de zoom inicial
+node extensao/tests/background.integration.js   # 14 checagens do background com chrome mockado
+```
+
+- `urlRules.test.js` - matching glob, especificidade, normalização de padrão
+- `disabledSites.test.js` - domínio raiz, chaves de desativação, TLDs compostos
+- `initialZoom.test.js` - precedência entre regra, zoom do Chrome e Smart Zoom
+- `background.integration.js` - sobe o `background.js` real num sandbox `vm` com `chrome` mockado e verifica que Ctrl+roda/slider não gravam regra, que a Options grava, e que a limpeza de chaves legadas preserva as internas
 
 Validações manuais recomendadas:
 
 ```txt
 1. Carregar extensão em chrome://extensions sem erros
 2. Ctrl+Roda ajusta zoom em incrementos de 2%
-3. Recarregar página restaura zoom salvo
+3. Recarregar página mantém o zoom ajustado (persistido pelo Chrome)
 4. Popup aplica zoom instantaneamente (sem F5)
 5. Reset (Alt+Shift+R) retorna ao zoom padrão configurado
 6. Presets salvos em Options aparecem e funcionam no popup
@@ -241,7 +267,7 @@ pytest tests/test_git_hooks.py
 - **Debounce de 300ms no save**: Evita escritas excessivas no storage durante scroll contínuo.
 - **`tabId` explícito no popup**: `sender.tab?.id` é undefined no contexto do popup; bug fix crítico para aplicação instantânea.
 - **Credenciais dinâmicas**: Supabase URL/Key lidas do `chrome.storage.local` a cada request; sem cache global permite alteração em tempo real.
-- **`chrome.storage.local` para credenciais**: Separação intencional — credenciais não devem sincronizar via `chrome.storage.sync`.
+- **`chrome.storage.local` para credenciais**: Separação intencional: credenciais não devem sincronizar via `chrome.storage.sync`.
 - **Compression Streams API nativa**: Evita dependência externa para compressão gzip; suportado nativamente no Chrome.
 - **RLS desabilitado temporariamente**: Anon key sem user auth requer RLS off; migrar para auth de usuário antes de produção.
 - **Upsert via `?on_conflict`**: PostgREST ignora `Prefer: resolution=merge-duplicates` sem constraint UNIQUE composta; parâmetro `on_conflict` força upsert nativo.

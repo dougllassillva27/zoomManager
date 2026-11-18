@@ -5,6 +5,8 @@
 
 // Desativação por site (estado de sessão): getRootDomain, isSiteDisabled, etc.
 importScripts('disabledSites.js');
+// Regras de URL (matching puro, compartilhado com a options page)
+importScripts('urlRules.js');
 
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 5.0;
@@ -165,131 +167,12 @@ function clampZoom(level) {
   return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(level * 100) / 100));
 }
 
-// --- URL Pattern Matching (Glob-to-Regex) ---
+// --- URL Pattern Matching (via urlRules.js) ---
 const URL_RULES_KEY = '__urlRules';
 
 /** Cache em memória das regras para evitar leitura assíncrona repetida */
 let urlRulesCache = null;
 
-/**
- * Converte padrão glob para RegExp.
- * Suporta: * (qualquer char exceto /), ** (qualquer char incluindo /), ? (um char).
- * @param {string} pattern - Padrão glob (ex: "google.com/maps/**")
- * @returns {RegExp}
- */
-function globToRegex(pattern) {
-  let regexStr = '';
-  let i = 0;
-  while (i < pattern.length) {
-    const ch = pattern[i];
-    if (ch === '*') {
-      if (pattern[i + 1] === '*') {
-        regexStr += '.*';
-        i += 2;
-        // Pula / após ** se presente
-        if (pattern[i] === '/') i++;
-      } else {
-        // * sozinho: se precedido por /, torna o / opcional para casar com hostname sem path
-        if (regexStr.endsWith('/')) {
-          regexStr = regexStr.slice(0, -1);
-          regexStr += '(/[^/]*)?';
-        } else {
-          regexStr += '[^/]*';
-        }
-        i++;
-      }
-    } else if (ch === '?') {
-      regexStr += '[^/]';
-      i++;
-    } else if ('.+^${}()|[]\\'.includes(ch)) {
-      regexStr += '\\' + ch;
-      i++;
-    } else {
-      regexStr += ch;
-      i++;
-    }
-  }
-  return new RegExp('^' + regexStr + '$');
-}
-
-/**
- * Calcula especificidade de um padrão glob.
- * Conta segmentos literais (não-glob) separados por /.
- * @param {string} pattern
- * @returns {number}
- */
-function calculateSpecificity(pattern) {
-  const segments = pattern.split('/');
-  let count = 0;
-  for (const seg of segments) {
-    // Segmento é literal se não contém *, ?
-    if (seg && !seg.includes('*') && !seg.includes('?')) {
-      count++;
-    }
-  }
-  return count;
-}
-
-/**
- * Extrai hostname+pathname de uma URL para matching contra padrões.
- * @param {string} url
- * @returns {string} hostname+pathname ou string vazia
- */
-function getUrlMatchTarget(url) {
-  try {
-    const parsed = new URL(url);
-    // Remove trailing slash para matching consistente
-    const pathname = parsed.pathname.replace(/\/+$/, '') || '';
-    return parsed.hostname + pathname;
-  } catch {
-    return '';
-  }
-}
-
-/**
- * Encontra a regra mais específica que casa com a URL.
- * Usa cache em memória se disponível, senão lê do storage.
- * @param {string} url - URL completa
- * @param {Array<{pattern: string, level: number, specificity: number}>} [rules] - Regras opcionais (usa cache se omitido)
- * @returns {{pattern: string, level: number, specificity: number}|null}
- */
-function matchUrl(url, rules) {
-  const target = getUrlMatchTarget(url);
-  debugLog('matchUrl:', { url, target });
-  if (!target) return null;
-
-  const ruleSet = rules ?? urlRulesCache;
-  debugLog('matchUrl: ruleSet size =', ruleSet?.length ?? 0);
-  if (!ruleSet || ruleSet.length === 0) return null;
-
-  // Prioridade 1: Regras com overrideSmartZoom (independente de especificidade)
-  for (const rule of ruleSet) {
-    if (rule.overrideSmartZoom) {
-      const re = globToRegex(rule.pattern);
-      if (re.test(target)) {
-        debugLog('matchUrl: override match encontrado', rule.pattern);
-        return rule;
-      }
-    }
-  }
-
-  // Prioridade 2: Maior especificidade
-  let bestMatch = null;
-  let bestSpecificity = -1;
-
-  for (const rule of ruleSet) {
-    if (rule.specificity < bestSpecificity) continue;
-    const re = globToRegex(rule.pattern);
-    if (re.test(target)) {
-      if (rule.specificity > bestSpecificity) {
-        bestMatch = rule;
-        bestSpecificity = rule.specificity;
-      }
-    }
-  }
-
-  return bestMatch;
-}
 
 /**
  * Carrega regras URL do storage para o cache em memória.
@@ -301,79 +184,188 @@ async function loadUrlRules() {
   return urlRulesCache;
 }
 
-/** Chave flag para evitar reexecução da migração */
-const MIGRATED_V2_KEY = '__migratedV2';
+/**
+ * Resolve a regra aplicável a URL, carregando o cache se necessário.
+ * @param {string} url
+ * @returns {Promise<{pattern: string, level: number, specificity: number}|null>}
+ */
+async function resolveRule(url) {
+  if (!urlRulesCache) await loadUrlRules();
+  return matchUrl(url, urlRulesCache);
+}
+
+/** Limite por item do chrome.storage.sync, com folga para a chave */
+const SYNC_ITEM_QUOTA = 8192;
+const SYNC_QUOTA_HEADROOM = 256;
 
 /**
- * Migra dados legacy (chaves hostname → __urlRules) na primeira execução.
- * Converte cada chave dinâmica "hostname": number em regra {pattern: "hostname/*", level, specificity: 1}.
- * Remove chaves antigas após conversão. Executa apenas uma vez.
+ * Grava o array de regras no storage.sync, validando a quota por item.
+ * Sem tocar em storage.sync não há como detectar o estouro, e um set
+ * rejeitado perderia a gravação inteira sem aviso.
+ * @param {Array} rules
+ * @returns {Promise<boolean>} true se gravou
  */
-async function migrateLegacyData() {
-  const flagResult = await chrome.storage.sync.get(MIGRATED_V2_KEY);
-  if (flagResult[MIGRATED_V2_KEY]) return;
+async function saveUrlRules(rules) {
+  const serialized = JSON.stringify({ [URL_RULES_KEY]: rules });
+  const bytes = new TextEncoder().encode(serialized).length;
 
+  if (bytes > SYNC_ITEM_QUOTA - SYNC_QUOTA_HEADROOM) {
+    console.error(
+      `[ZoomManager] __urlRules excede a cota do sync: ${bytes} bytes (limite ${SYNC_ITEM_QUOTA}). ` +
+      `Regras: ${rules.length}. Remova regras na Options Page.`
+    );
+    return false;
+  }
+
+  try {
+    await chrome.storage.sync.set({ [URL_RULES_KEY]: rules });
+    return true;
+  } catch (err) {
+    console.error('[ZoomManager] Falha ao gravar __urlRules:', err);
+    return false;
+  }
+}
+
+/**
+ * Indica se uma regra deve ser enviada ao Supabase.
+ * Regras de chrome://, chrome-extension:// e file:// são locais da máquina:
+ * a própria página de opções gera uma ao ajustar o zoom nela.
+ * @param {{pattern: string}} rule
+ * @returns {boolean}
+ */
+function isSyncableRule(rule) {
+  if (!rule?.pattern) return false;
+  return !(
+    rule.pattern.startsWith('chrome-extension://') ||
+    rule.pattern.startsWith('chrome://') ||
+    rule.pattern.startsWith('file://')
+  );
+}
+
+/**
+ * Mescla regras vindas do Supabase com as locais, sem sobrescrever.
+ * Sobrescrever o array inteiro apagava regras criadas aqui quando a nuvem
+ * estava desatualizada. A regra local vence em caso de mesmo padrão.
+ * @param {Array<{pattern: string, zoom_level: number, specificity: number}>} remoteRules
+ * @returns {Promise<Array>} array mesclado
+ */
+async function mergePulledRules(remoteRules) {
+  if (!Array.isArray(remoteRules) || remoteRules.length === 0) {
+    return urlRulesCache ?? [];
+  }
+  if (!urlRulesCache) await loadUrlRules();
+
+  const byPattern = new Map(urlRulesCache.map(r => [r.pattern, r]));
+  for (const r of remoteRules) {
+    if (!r?.pattern || byPattern.has(r.pattern)) continue;
+    byPattern.set(r.pattern, {
+      pattern: r.pattern,
+      level: Number(r.zoom_level),
+      specificity: Number(r.specificity)
+    });
+  }
+  return [...byPattern.values()];
+}
+
+/**
+ * Remove a regra que se aplica a URL e devolve o zoom padrão.
+ *
+ * Remove pelo padrão exato da regra que casou, não por `hostname/*`: uma
+ * regra de path (ex: site.com/artigos/**) também é um ajuste daquele site
+ * e precisa sair no reset, senão continua sendo aplicada.
+ *
+ * @param {string} url
+ * @returns {Promise<number>} nível padrão a aplicar
+ */
+async function resetZoomForUrl(url) {
+  const defResult = await chrome.storage.sync.get(DEFAULT_ZOOM_KEY);
+  const defaultLevel = defResult[DEFAULT_ZOOM_KEY] ?? ZOOM_DEFAULT;
+
+  if (!urlRulesCache) await loadUrlRules();
+
+  const matched = matchUrl(url, urlRulesCache);
+  if (matched) {
+    const index = urlRulesCache.findIndex(r => r.pattern === matched.pattern);
+    if (index >= 0) {
+      urlRulesCache.splice(index, 1);
+      await saveUrlRules(urlRulesCache);
+    }
+  }
+
+  // Fallback: remove chave legacy se existir
+  const hostname = getZoomKey(url);
+  if (hostname) {
+    await chrome.storage.sync.remove(hostname);
+  }
+
+  return defaultLevel;
+}
+
+
+/**
+ * Remove as chaves legadas "hostname": number do storage.sync.
+ *
+ * O modelo antigo gravava um item por site, o que enche a cota de itens do
+ * chrome.storage.sync (limite de 512). O modelo atual guarda tudo em
+ * __urlRules (um item só). As chaves antigas nao sao convertidas em regras:
+ * eram efeito colateral de ajuste manual, nao curadoria.
+ *
+ * Roda uma vez, e de novo se as chaves reaparecerem via pull do Supabase.
+ * @returns {Promise<number>} quantidade de chaves removidas
+ */
+async function removeLegacyHostKeys() {
   const allData = await chrome.storage.sync.get(null);
-  const newRules = [];
-  const keysToRemove = [];
+  const keysToRemove = Object.keys(allData).filter(
+    (key) => !key.startsWith('__') && typeof allData[key] === 'number'
+  );
+  if (keysToRemove.length === 0) return 0;
 
-  for (const [key, value] of Object.entries(allData)) {
-    if (!key.startsWith('__') && typeof value === 'number') {
-      newRules.push({
-        pattern: key + '/*',
-        level: value,
-        specificity: calculateSpecificity(key + '/*')
-      });
-      keysToRemove.push(key);
-    }
+  // Remove em lotes para não estourar o limite de operações por chamada
+  const CHUNK = 100;
+  for (let i = 0; i < keysToRemove.length; i += CHUNK) {
+    await chrome.storage.sync.remove(keysToRemove.slice(i, i + CHUNK));
   }
+  console.log(`[ZoomManager] ${keysToRemove.length} chaves legadas por hostname removidas`);
+  return keysToRemove.length;
+}
 
-  if (newRules.length > 0) {
-    // Mescla com regras existentes (caso já existam de um sync pull)
-    const existingResult = await chrome.storage.sync.get(URL_RULES_KEY);
-    const existingRules = existingResult[URL_RULES_KEY] ?? [];
-    const mergedRules = [...existingRules, ...newRules];
-
-    const updates = { [URL_RULES_KEY]: mergedRules, [MIGRATED_V2_KEY]: true };
-    await chrome.storage.sync.set(updates);
-    if (keysToRemove.length > 0) {
-      await chrome.storage.sync.remove(keysToRemove);
-    }
-    console.log(`[ZoomManager] Migrated ${newRules.length} legacy hostname rules to URL patterns`);
-  } else {
-    // Sem dados legacy, apenas marca flag
-    await chrome.storage.sync.set({ [MIGRATED_V2_KEY]: true });
+/**
+ * Limpeza de dados legados no startup do service worker.
+ * Remove as chaves "hostname": number que enchem a cota de itens do sync.
+ * Não converte em regras: ajuste manual de zoom não é curadoria de URL.
+ */
+async function cleanupLegacyData() {
+  try {
+    await removeLegacyHostKeys();
+  } catch (err) {
+    console.error('[ZoomManager] Falha na limpeza de chaves legadas:', err);
   }
-
-  // Recarrega cache após migração
   await loadUrlRules();
 }
 
-// Executa migração no startup do service worker
-migrateLegacyData();
+// Executa limpeza no startup do service worker
+cleanupLegacyData();
 
 // --- Message Passing ---
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handler = async () => {
     switch (message.type) {
       case 'GET_ZOOM': {
-        // Ordem de prioridade: Regra URL com override > Smart Zoom > Regra URL específica > Zoom padrão
+        // Ordem de prioridade: Regra URL com override > Smart Zoom > Regra URL > Zoom padrão
         const url = message.url || message.hostname;
         debugLog('GET_ZOOM:', { url, width: message.width, height: message.height });
         if (!url) return ZOOM_DEFAULT;
 
-        // Garante que cache está carregado
-        if (!urlRulesCache) await loadUrlRules();
+        const matchedRule = await resolveRule(url);
+        debugLog('GET_ZOOM regra encontrada:', matchedRule);
 
-        // 1. Tenta regra URL com overrideSmartZoom primeiro (prioridade máxima)
-        const matchedOverride = matchUrl(url);
-        debugLog('GET_ZOOM matchedOverride:', matchedOverride);
-        if (matchedOverride && matchedOverride.overrideSmartZoom) {
-          debugLog('GET_ZOOM: override ativo, retornando', matchedOverride.level);
-          return matchedOverride.level;
+        // 1. Regra com overrideSmartZoom tem prioridade máxima
+        if (matchedRule && matchedRule.overrideSmartZoom) {
+          debugLog('GET_ZOOM: override ativo, retornando', matchedRule.level);
+          return matchedRule.level;
         }
 
-        // 2. Tenta Smart Zoom (prioridade sobre regras URL normais)
+        // 2. Smart Zoom (prioridade sobre regras URL normais)
         if (message.width && message.height) {
           const szResult = await chrome.storage.sync.get('__smartZoomProfiles');
           let profiles = szResult['__smartZoomProfiles'] ?? [];
@@ -387,15 +379,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
         }
 
-        // 3. Tenta regra URL específica (specificity > 1, sem override)
-        if (matchedOverride && matchedOverride.specificity > 1) {
-          debugLog('GET_ZOOM: regra específica', matchedOverride.level);
-          return matchedOverride.level;
+        // 3. Qualquer regra URL que casou
+        if (matchedRule) {
+          debugLog('GET_ZOOM: regra aplicada', matchedRule.level);
+          return matchedRule.level;
         }
 
         // 4. Fallback: zoom padrão
         debugLog('GET_ZOOM: fallback ZOOM_DEFAULT');
         return ZOOM_DEFAULT;
+      }
+
+      case 'APPLY_ONLY': {
+        // Aplica zoom na aba sem gravar regra nenhuma.
+        // O ajuste manual (Ctrl+roda, slider) para por aqui: o Chrome já
+        // persiste zoom por host nativamente. Regra é só curadoria manual.
+        const { tabId: applyTabId, level: applyLevel } = message;
+        const targetTab = applyTabId ?? sender.tab?.id;
+        if (targetTab == null) return false;
+        if (await isTabDisabled(targetTab, sender.tab?.url)) return false;
+        await chrome.tabs.setZoom(targetTab, clampZoom(applyLevel));
+        return true;
       }
 
       case 'SAVE_ZOOM': {
@@ -409,52 +413,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Garante que cache está carregado
         if (!urlRulesCache) await loadUrlRules();
 
-        // Extrai hostname+pathname para criar/atualizar regra
-        const target = getUrlMatchTarget(url);
-        if (!target) return false;
+        // A regra só é gravada quando a mensagem traz `pattern` explícito,
+        // ou seja, quando a Options Page pediu. Ajuste manual de zoom
+        // (Ctrl+roda, slider) usa APPLY_ONLY e não passa por aqui.
+        const rawPattern = message.pattern;
+        if (!rawPattern || typeof rawPattern !== 'string') {
+          debugLog('SAVE_ZOOM ignorado: sem pattern explícito (ajuste manual)');
+          return false;
+        }
 
-        // Usa hostname/* como padrão padrão para saves via content script
-        const hostname = getZoomKey(url);
-        const pattern = hostname ? hostname + '/*' : target;
+        const pattern = rawPattern.trim();
+        if (!pattern) return false;
         const specificity = calculateSpecificity(pattern);
 
         // Atualiza ou adiciona regra no array
         const existingIndex = urlRulesCache.findIndex(r => r.pattern === pattern);
         if (existingIndex >= 0) {
           urlRulesCache[existingIndex].level = clamped;
+          urlRulesCache[existingIndex].specificity = specificity;
+          if (message.overrideSmartZoom != null) {
+            urlRulesCache[existingIndex].overrideSmartZoom = !!message.overrideSmartZoom;
+          }
         } else {
-          urlRulesCache.push({ pattern, level: clamped, specificity });
+          urlRulesCache.push({
+            pattern,
+            level: clamped,
+            specificity,
+            ...(message.overrideSmartZoom ? { overrideSmartZoom: true } : {})
+          });
         }
 
-        await chrome.storage.sync.set({ [URL_RULES_KEY]: urlRulesCache });
+        const saved = await saveUrlRules(urlRulesCache);
+        if (!saved) return false;
         return clamped;
+      }
+
+      case 'DELETE_URL_RULE': {
+        const { pattern } = message;
+        if (!pattern || typeof pattern !== 'string') return false;
+        if (!urlRulesCache) await loadUrlRules();
+        const index = urlRulesCache.findIndex(r => r.pattern === pattern);
+        if (index < 0) return false;
+        urlRulesCache.splice(index, 1);
+        return await saveUrlRules(urlRulesCache);
       }
 
       case 'RESET_ZOOM': {
         const url = message.url || message.hostname;
         if (!url) return false;
-        // Lê zoom padrão customizado
-        const defResult = await chrome.storage.sync.get(DEFAULT_ZOOM_KEY);
-        const defaultLevel = defResult[DEFAULT_ZOOM_KEY] ?? ZOOM_DEFAULT;
-
-        // Garante que cache está carregado
-        if (!urlRulesCache) await loadUrlRules();
-
-        // Remove regra correspondente do __urlRules
-        const hostname = getZoomKey(url);
-        const pattern = hostname ? hostname + '/*' : getUrlMatchTarget(url);
-        const ruleIndex = urlRulesCache.findIndex(r => r.pattern === pattern);
-        if (ruleIndex >= 0) {
-          urlRulesCache.splice(ruleIndex, 1);
-          await chrome.storage.sync.set({ [URL_RULES_KEY]: urlRulesCache });
-        }
-
-        // Fallback: remove chave legacy se existir
-        if (hostname) {
-          await chrome.storage.sync.remove(hostname);
-        }
-
-        return defaultLevel;
+        return await resetZoomForUrl(url);
       }
 
       case 'APPLY_ZOOM': {
@@ -549,8 +556,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           const presets = allData['__zoomPresets'] ?? [];
 
           // Push __urlRules como unidade única (serializa array completo)
-          // Filtra padrões internos (chrome-extension://, chrome://) que não devem ser sincronizados
-          const syncableRules = urlRules.filter(r => !r.pattern.startsWith('chrome-extension://') && !r.pattern.startsWith('chrome://'));
+          // Filtra padrões internos que são locais da máquina e não devem ser sincronizados
+          const syncableRules = urlRules.filter(isSyncableRule);
           if (syncableRules.length > 0) {
             const rulesPayload = syncableRules.map(r => ({
               pattern: r.pattern,
@@ -721,13 +728,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!match) return { applied: false };
         // Aplica zoom
         await chrome.tabs.setZoom(targetTabId, clampZoom(match.zoom_level));
-        // Salva no domínio para persistir com F5
-        if (sender.tab?.url) {
-          const hostname = getZoomKey(sender.tab.url);
-          if (hostname) {
-            await chrome.storage.sync.set({ [hostname]: clampZoom(match.zoom_level) });
-          }
-        }
+        // Não grava regra: Smart Zoom é por resolução, não curadoria de URL
         return { applied: true, level: match.zoom_level };
       }
 
@@ -914,9 +915,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             for (const entry of zoomResult.data) {
               if (entry.hostname === '__default__') {
                 updates[DEFAULT_ZOOM_KEY] = Number(entry.zoom_level);
-              } else {
-                updates[entry.hostname] = entry.zoom_level;
               }
+              // Chaves "hostname": number não são mais recriadas no sync:
+              // são itens avulsos que enchem a cota (limite de 512) e não
+              // alimentam nada. Só __default__ ainda é lido daqui.
             }
           }
 
@@ -969,18 +971,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             updates['__pdfZoomProfiles'] = profiles;
           }
 
-          // Pull zoom_url_rules
+          // Pull zoom_url_rules: mescla com as regras locais.
+          // Sobrescrever o array inteiro apagava regras criadas aqui quando
+          // a nuvem estava desatualizada. O local vence em caso de conflito.
           const rulesResult = await supabaseRequest('/rest/v1/zoom_url_rules?select=pattern,zoom_level,specificity');
           if (rulesResult.error) {
             console.error('[Supabase] SYNC_PULL zoom_url_rules error:', rulesResult.error);
             return { success: false, error: rulesResult.error, timestamp: new Date().toISOString() };
           }
           if (rulesResult.data && rulesResult.data.length > 0) {
-            updates[URL_RULES_KEY] = rulesResult.data.map(r => ({
-              pattern: r.pattern,
-              level: Number(r.zoom_level),
-              specificity: Number(r.specificity)
-            }));
+            updates[URL_RULES_KEY] = await mergePulledRules(rulesResult.data);
           }
 
           if (Object.keys(updates).length > 0) {
@@ -1058,14 +1058,8 @@ chrome.runtime.onInstalled.addListener(async () => {
   chrome.alarms.create('supabase-sync', { periodInMinutes: 60 });
   // Pull inicial: puxa configs do Supabase na primeira instalação
   try {
-    const zoomResult = await supabaseRequest('/rest/v1/zoom_settings?select=hostname,zoom_level');
     const presetResult = await supabaseRequest('/rest/v1/presets?select=label,level,sort_order&order=sort_order.asc');
     const updates = {};
-    if (zoomResult.data && zoomResult.data.length > 0) {
-      for (const entry of zoomResult.data) {
-        updates[entry.hostname] = entry.zoom_level;
-      }
-    }
     if (presetResult.data && presetResult.data.length > 0) {
       const seenInstall = new Set();
       updates['__zoomPresets'] = presetResult.data
@@ -1077,15 +1071,11 @@ chrome.runtime.onInstalled.addListener(async () => {
           return true;
         });
     }
-    // Pull zoom_url_rules
+    // Pull zoom_url_rules (mescla, não sobrescreve)
     try {
       const rulesResult = await supabaseRequest('/rest/v1/zoom_url_rules?select=pattern,zoom_level,specificity');
       if (!rulesResult.error && rulesResult.data && rulesResult.data.length > 0) {
-        updates[URL_RULES_KEY] = rulesResult.data.map(r => ({
-          pattern: r.pattern,
-          level: Number(r.zoom_level),
-          specificity: Number(r.specificity)
-        }));
+        updates[URL_RULES_KEY] = await mergePulledRules(rulesResult.data);
       }
     } catch (e) {
       console.error('[Supabase] Initial pull zoom_url_rules failed:', e);
@@ -1201,26 +1191,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   } else if (info.menuItemId === 'zoom-reset') {
     const url = tab.url || '';
     if (!url) return;
-    const defResult = await chrome.storage.sync.get(DEFAULT_ZOOM_KEY);
-    const defaultLevel = defResult[DEFAULT_ZOOM_KEY] ?? ZOOM_DEFAULT;
-
-    // Garante que cache está carregado
-    if (!urlRulesCache) await loadUrlRules();
-
-    // Remove regra correspondente do __urlRules
-    const hostname = getZoomKey(url);
-    const pattern = hostname ? hostname + '/*' : getUrlMatchTarget(url);
-    const ruleIndex = urlRulesCache.findIndex(r => r.pattern === pattern);
-    if (ruleIndex >= 0) {
-      urlRulesCache.splice(ruleIndex, 1);
-      await chrome.storage.sync.set({ [URL_RULES_KEY]: urlRulesCache });
-    }
-
-    // Fallback: remove chave legacy se existir
-    if (hostname) {
-      await chrome.storage.sync.remove(hostname);
-    }
-
+    const defaultLevel = await resetZoomForUrl(url);
     await chrome.tabs.setZoom(tab.id, clampZoom(defaultLevel));
   } else if (typeof info.menuItemId === 'string' && info.menuItemId.startsWith('preset-')) {
     // Site desativado: presets do menu de contexto ignorados
@@ -1254,30 +1225,7 @@ chrome.commands.onCommand.addListener(async (command) => {
 
     const url = tab.url;
     if (!url) return;
-    const defResult = await chrome.storage.sync.get(DEFAULT_ZOOM_KEY);
-    const defaultLevel = defResult[DEFAULT_ZOOM_KEY] ?? ZOOM_DEFAULT;
-
-    // Garante que cache está carregado
-    if (!urlRulesCache) await loadUrlRules();
-
-    // Remove regra correspondente do __urlRules
-    const hostname = getZoomKey(url);
-    const pattern = hostname ? hostname + '/*' : getUrlMatchTarget(url);
-    const ruleIndex = urlRulesCache.findIndex(r => r.pattern === pattern);
-    if (ruleIndex >= 0) {
-      urlRulesCache.splice(ruleIndex, 1);
-      await chrome.storage.sync.set({ [URL_RULES_KEY]: urlRulesCache });
-    }
-
-    // Fallback: remove chave legacy se existir
-    if (hostname) {
-      await chrome.storage.sync.remove(hostname);
-    }
-
-    // Após reset, tenta Smart Zoom antes de cair para o padrão
-    // Nota: não temos acesso direto à resolução da aba aqui,
-    // então aplicamos o defaultLevel e deixamos o content script
-    // reaplicar Smart Zoom no próximo ciclo se disponível
+    const defaultLevel = await resetZoomForUrl(url);
     await chrome.tabs.setZoom(tab.id, clampZoom(defaultLevel));
   } catch (err) {
     console.error('[ZoomManager] Reset command error:', err);
@@ -1397,39 +1345,27 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     }
 
     // Lógica normal para páginas HTML
-    // Ordem de prioridade: Regra URL com override > Smart Zoom > Regra URL específica > Zoom padrão
+    // Ordem de prioridade: Regra URL com override > Smart Zoom > Regra URL > padrão
     const url = tab.url;
     debugLog('tabs.onUpdated:', { tabId, url });
     if (!url) return;
 
-    // Garante que cache está carregado
-    if (!urlRulesCache) await loadUrlRules();
+    const matchedRule = await resolveRule(url);
+    debugLog('tabs.onUpdated regra encontrada:', matchedRule);
 
-    // 1. Tenta regra URL com overrideSmartZoom primeiro (prioridade máxima)
-    const matchedOverride = matchUrl(url);
-    debugLog('tabs.onUpdated matchedOverride:', matchedOverride);
-    if (matchedOverride && matchedOverride.overrideSmartZoom) {
-      debugLog('tabs.onUpdated: override ativo, aplicando', matchedOverride.level);
-      await chrome.tabs.setZoom(tabId, matchedOverride.level);
+    // Regra URL (com ou sem override) tem prioridade; Smart Zoom fica
+    // para o content script quando nenhuma regra casa.
+    if (matchedRule) {
+      debugLog('tabs.onUpdated: aplicando regra', matchedRule.pattern, matchedRule.level);
+      await chrome.tabs.setZoom(tabId, matchedRule.level);
       return;
     }
 
-    // 2. Smart Zoom é aplicado pelo content script; aqui apenas restauramos regras URL
-
-    // 3. Tenta regra URL específica (specificity > 1, sem override)
-    if (matchedOverride && matchedOverride.specificity > 1 && matchedOverride.level !== ZOOM_DEFAULT) {
-      debugLog('tabs.onUpdated: regra específica, aplicando', matchedOverride.level);
-      await chrome.tabs.setZoom(tabId, matchedOverride.level);
-      return;
-    }
-
-    debugLog('tabs.onUpdated: nenhuma regra específica encontrada, deixando content script decidir');
-
-    // 4. Fallback: zoom padrão (não aplica nada, deixa o content script decidir)
+    debugLog('tabs.onUpdated: nenhuma regra encontrada, deixando content script decidir');
   } catch (err) {
     // Ignora erros em páginas restritas (chrome://, edge://, etc.)
     if (!err.message?.includes('Cannot access')) {
-      console.error(`[ZoomManager] Restore zoom error for ${hostname}:`, err);
+      console.error('[ZoomManager] Restore zoom error:', err);
     }
   }
 });

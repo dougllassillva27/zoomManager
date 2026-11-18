@@ -17,7 +17,7 @@
       <div class="grid-col">
         <div class="setting">
           <label for="defaultZoom" class="label">Zoom Padrão (%)</label>
-          <p class="description">Valor aplicado ao resetar (Alt+Shift+R). Range: 25–500%.</p>
+          <p class="description">Valor aplicado ao resetar (Alt+Shift+R). Range: 25 a 500%.</p>
           <div class="input-row">
             <input type="number" id="defaultZoom" min="25" max="500" step="1" value="100">
             <span class="unit">%</span>
@@ -120,7 +120,7 @@
     <!-- Zoom Padrão PDF: Full Width -->
     <section class="setting" id="pdf-zoom-section">
       <label for="pdfDefaultZoom" class="label">Zoom Padrão para PDFs (%)</label>
-      <p class="description">Zoom aplicado automaticamente ao abrir PDFs. Range: 25–500%. Padrão: 100%.</p>
+      <p class="description">Zoom aplicado automaticamente ao abrir PDFs. Range: 25 a 500%. Padrão: 100%.</p>
       <div class="input-row">
         <input type="number" id="pdfDefaultZoom" min="25" max="500" step="2" value="100">
         <span class="unit">%</span>
@@ -146,6 +146,7 @@
     </section>
   </div>
 
+  <script src="urlRules.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

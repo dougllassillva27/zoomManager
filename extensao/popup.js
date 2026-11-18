@@ -74,20 +74,27 @@ function roundToStep2(val) {
 }
 
 /**
- * Aplica zoom e salva no storage.
+ * Aplica zoom na aba sem gravar regra. O benefício do debounce aqui é só
+ * evitar um setZoom por pixel do arrasto do slider.
  */
-async function applyAndSave(zoomPercent) {
-  if (!currentTabId) return;
+let applyTimeout = null;
+function applyDebounced(zoomPercent) {
   const level = zoomPercent / 100;
-
-  await sendMessage({ type: 'APPLY_ZOOM', tabId: currentTabId, level });
-
   if (isPdfTab) {
-    await sendMessage({ type: 'SAVE_PDF_ZOOM', level });
-  } else {
-    if (!currentUrl) return;
-    await sendMessage({ type: 'SAVE_ZOOM', url: currentUrl, level });
+    // PDF usa o zoom global de PDF, esse sim é persistido
+    sendMessage({ type: 'APPLY_ZOOM', tabId: currentTabId, level });
+    if (applyTimeout) clearTimeout(applyTimeout);
+    applyTimeout = setTimeout(() => {
+      sendMessage({ type: 'SAVE_PDF_ZOOM', level });
+    }, 300);
+    return;
   }
+
+  // Página HTML: aplica só na aba. Regra é curadoria manual na Options Page.
+  if (applyTimeout) clearTimeout(applyTimeout);
+  applyTimeout = setTimeout(() => {
+    sendMessage({ type: 'APPLY_ONLY', tabId: currentTabId, level });
+  }, 60);
 }
 
 // --- Event Listeners ---
@@ -97,7 +104,7 @@ zoomRange.addEventListener('input', () => {
   if (isUpdating) return;
   const val = roundToStep2(parseInt(zoomRange.value, 10));
   zoomNumber.value = val;
-  applyAndSave(val);
+  applyDebounced(val);
 });
 
 // Number input change
@@ -107,7 +114,7 @@ zoomNumber.addEventListener('change', () => {
   val = Math.min(500, Math.max(26, val));
   zoomNumber.value = val;
   zoomRange.value = val;
-  applyAndSave(val);
+  applyDebounced(val);
 });
 
 // Reset button
@@ -117,8 +124,8 @@ resetBtn.addEventListener('click', async () => {
   if (isPdfTab) {
     defaultLevel = await sendMessage({ type: 'RESET_PDF_ZOOM', tabId: currentTabId });
   } else {
-    if (!currentHostname) return;
-    defaultLevel = await sendMessage({ type: 'RESET_ZOOM', hostname: currentHostname });
+    if (!currentUrl) return;
+    defaultLevel = await sendMessage({ type: 'RESET_ZOOM', url: currentUrl });
   }
   const defaultPercent = Math.round((defaultLevel ?? 1.0) * 100);
   updateUI(defaultPercent);

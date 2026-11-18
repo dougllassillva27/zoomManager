@@ -279,42 +279,7 @@ function renderUrlRules() {
   });
 }
 
-/**
- * Calcula especificidade de um padrão glob.
- * Conta segmentos literais (não-glob) separados por /.
- */
-function calculateSpecificity(pattern) {
-  const segments = pattern.split('/');
-  let count = 0;
-  for (const seg of segments) {
-    if (seg && !seg.includes('*') && !seg.includes('?')) {
-      count++;
-    }
-  }
-  return count;
-}
-
-/**
- * Normaliza padrão de URL colada da barra de endereços.
- * Remove protocolo, query string, hash e trailing slash.
- * Se o resultado for apenas hostname (sem /), adiciona /* automaticamente.
- * Ex: "https://www.facebook.com/" → "www.facebook.com/*"
- * Ex: "https://github.com/user/repo" → "github.com/user/repo"
- */
-function normalizePattern(raw) {
-  let p = raw.trim();
-  // Remove protocolo
-  p = p.replace(/^https?:\/\//, '');
-  // Remove query string e hash
-  p = p.split('?')[0].split('#')[0];
-  // Remove trailing slash (mas preserva /** no final)
-  p = p.replace(/\/+$/, '') || p;
-  // Se não contém /, é apenas hostname → adiciona /* para casar com qualquer path
-  if (!p.includes('/')) {
-    p += '/*';
-  }
-  return p;
-}
+// calculateSpecificity e normalizePattern vêm de urlRules.js (escopo global)
 
 const urlRuleOverrideInput = document.getElementById('urlRuleOverride');
 
@@ -334,33 +299,47 @@ addUrlRuleBtn.addEventListener('click', async () => {
 
   level = Math.round(level / 2) * 2;
   const zoomLevel = level / 100;
-  const specificity = calculateSpecificity(pattern);
 
-  // Verifica duplicata por pattern
-  const existingIndex = currentUrlRules.findIndex(r => r.pattern === pattern);
-  if (existingIndex >= 0) {
-    // Atualiza existente
-    currentUrlRules[existingIndex].level = zoomLevel;
-    currentUrlRules[existingIndex].specificity = specificity;
-    currentUrlRules[existingIndex].overrideSmartZoom = overrideSmartZoom;
-  } else {
-    currentUrlRules.push({ pattern, level: zoomLevel, specificity, overrideSmartZoom });
+  console.log('[ZoomDebug] Salvando regra:', { pattern, level: zoomLevel, overrideSmartZoom });
+  try {
+    // Grava pelo background: ele valida a cota e mantém o cache coerente
+    const saved = await sendMessage({
+      type: 'SAVE_ZOOM',
+      url: `https://${pattern.replace(/\/.*$/, '')}/`,
+      pattern,
+      level: zoomLevel,
+      overrideSmartZoom
+    });
+    if (saved === false || saved == null) {
+      showStatus('Erro ao salvar: limite de armazenamento do sync atingido.', 'error');
+      return;
+    }
+    await loadUrlRules();
+    showStatus('Regra salva!', 'success');
+    urlRulePatternInput.value = '';
+    urlRuleLevelInput.value = '100';
+    urlRuleOverrideInput.checked = false;
+  } catch (err) {
+    console.error('[ZoomDebug] Exceção ao salvar regra:', err);
+    showStatus(`Erro ao salvar: ${err.message}`, 'error');
   }
-
-  console.log('[ZoomDebug] Salvando regra:', { pattern, level: zoomLevel, specificity, overrideSmartZoom });
-  await chrome.storage.sync.set({ [URL_RULES_KEY]: currentUrlRules });
-  renderUrlRules();
-  showStatus('Regra salva!', 'success');
-  urlRulePatternInput.value = '';
-  urlRuleLevelInput.value = '100';
-  urlRuleOverrideInput.checked = false;
 });
 
 async function removeUrlRule(index) {
-  currentUrlRules.splice(index, 1);
-  await chrome.storage.sync.set({ [URL_RULES_KEY]: currentUrlRules });
-  renderUrlRules();
-  showStatus('Regra removida.', 'success');
+  const rule = currentUrlRules[index];
+  if (!rule) return;
+  try {
+    const removed = await sendMessage({ type: 'DELETE_URL_RULE', pattern: rule.pattern });
+    if (removed !== true) {
+      showStatus('Erro ao remover regra.', 'error');
+      return;
+    }
+    await loadUrlRules();
+    showStatus('Regra removida.', 'success');
+  } catch (err) {
+    console.error('[ZoomDebug] Exceção ao remover regra:', err);
+    showStatus(`Erro ao remover: ${err.message}`, 'error');
+  }
 }
 
 // --- PDF Default Zoom ---

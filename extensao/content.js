@@ -9,6 +9,8 @@ let currentZoom = null;
 let saveTimeout = null;
 // Site desativado: extensão fica passiva (não intercepta nem aplica zoom)
 let siteDisabled = false;
+// Contexto invalidado (extensão recarregada): script zumbi para de interceptar
+let contextInvalidated = false;
 
 /**
  * Envia mensagem ao background e retorna promessa.
@@ -17,47 +19,41 @@ let siteDisabled = false;
  */
 function sendMessage(message) {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage(message, (response) => {
-      if (chrome.runtime.lastError) {
-        resolve(null);
-      } else {
-        resolve(response);
-      }
-    });
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (chrome.runtime.lastError) {
+          resolve(null);
+        } else {
+          resolve(response);
+        }
+      });
+    } catch {
+      // Contexto invalidado (extensão recarregada): script vira zumbi;
+      // para de interceptar para devolver o zoom nativo à aba
+      contextInvalidated = true;
+      resolve(null);
+    }
   });
 }
 
 /**
- * Aplica zoom na aba atual via background.
+ * Aplica zoom na aba atual via background, sem gravar regra.
+ * O Chrome persiste zoom por host nativamente, então o ajuste sobrevive
+ * ao recarregamento. Regra em __urlRules é só curadoria manual (Options).
  * @param {number} level
  */
 async function applyZoom(level) {
-  const result = await sendMessage({ type: 'APPLY_ZOOM', level });
+  const result = await sendMessage({ type: 'APPLY_ONLY', level });
   if (result !== false) {
     currentZoom = level;
   }
-}
-
-/**
- * Salva zoom no storage com debounce.
- * @param {number} level
- */
-function saveZoomDebounced(level) {
-  if (saveTimeout) clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => {
-    sendMessage({
-      type: 'SAVE_ZOOM',
-      url: window.location.href,
-      level,
-    });
-  }, 300);
 }
 
 // --- Interceptar Ctrl+Wheel (apenas páginas HTML; viewer PDF nativo consome eventos antes do content script) ---
 window.addEventListener(
   'wheel',
   (event) => {
-    if (!event.ctrlKey || isPdf || siteDisabled) return;
+    if (!event.ctrlKey || isPdf || siteDisabled || contextInvalidated) return;
 
     event.preventDefault();
     event.stopPropagation();
@@ -69,7 +65,6 @@ window.addEventListener(
 
     if (clampedZoom !== baseZoom) {
       applyZoom(clampedZoom);
-      saveZoomDebounced(clampedZoom);
     }
   },
   { passive: false, capture: true }
@@ -107,23 +102,34 @@ async function applyInitialZoom() {
 
   const savedZoom = await sendMessage({ type: 'GET_ZOOM', url });
   if (savedZoom != null && savedZoom !== 1.0) {
-    // Zoom manual salvo tem prioridade sobre Smart Zoom
+    // Regra manual da Options Page tem prioridade sobre tudo
     currentZoom = savedZoom;
     requestAnimationFrame(() => {
       applyZoom(savedZoom);
     });
+    return;
+  }
+
+  // Sem regra: respeita o zoom que o Chrome já restaurou para este host.
+  // O Chrome persiste zoom por host nativamente, então um ajuste manual
+  // (Ctrl+roda, slider) chega aqui como zoom != 1.0. Sobrescrever com
+  // Smart Zoom anularia esse ajuste a cada carregamento.
+  const chromeZoom = await sendMessage({ type: 'GET_CURRENT_ZOOM', tabId: currentTabId });
+  if (chromeZoom != null && Math.abs(chromeZoom - 1.0) > 0.01) {
+    currentZoom = chromeZoom;
+    return;
+  }
+
+  // Chrome no default: aí sim aplica Smart Zoom por resolução
+  const smartResult = await sendMessage({
+    type: 'APPLY_SMART_ZOOM',
+    width: screen.width,
+    height: screen.height
+  });
+  if (smartResult?.applied) {
+    currentZoom = smartResult.level;
   } else {
-    // Sem zoom manual: tenta Smart Zoom por resolução
-    const smartResult = await sendMessage({
-      type: 'APPLY_SMART_ZOOM',
-      width: screen.width,
-      height: screen.height
-    });
-    if (smartResult?.applied) {
-      currentZoom = smartResult.level;
-    } else {
-      currentZoom = 1.0;
-    }
+    currentZoom = 1.0;
   }
 }
 
